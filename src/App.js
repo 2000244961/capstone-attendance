@@ -17,8 +17,8 @@ function App() {
     const modelLoaded = () => {
       webcamRef.current.video.width = width;
       webcamRef.current.video.height = height;
-      canvasRef.current.width = width;
-      canvasRef.current.height = height;
+      // canvasRef.current.width = width;
+      // canvasRef.current.height = height;
 
 
       detectionInterval = setInterval(() => {
@@ -35,17 +35,17 @@ function App() {
       }
 
       objectDetector.detect(webcamRef.current.video, (err, results) => {
-        const ctx = canvasRef.current.getContext('2d');
-        ctx.clearRect(0, 0, width, height);
+        // const ctx = canvasRef.current.getContext('2d');
+        // ctx.clearRect(0, 0, width, height);
         if (results && results.length) {
-          results.forEach((detection) => {
-            ctx.beginPath();
-            ctx.fillStyle = "#FF0000";
-            const { label, x, y, width, height } = detection;
-            ctx.fillText(label, x, y - 5);
-            ctx.rect(x, y, width, height);
-            ctx.stroke();
-          });
+          // results.forEach((detection) => {
+            // ctx.beginPath();
+            // ctx.fillStyle = "#FF0000";
+            // const { label, x, y, width, height } = detection;
+            // ctx.fillText(label, x, y - 5);
+            // ctx.rect(x, y, width, height);
+            // ctx.stroke();
+          // });
           console.log(results[0].label.toString())
         }
       });
@@ -60,9 +60,9 @@ function App() {
   }, [width, height]);
 
   return (
-      <div>
+      <div className="mb-100">
         <Webcam ref={webcamRef} className="webcam"/>
-        <canvas ref={canvasRef} className="canvas"/>
+        {/* <canvas ref={canvasRef} className="canvas"/> */}
       </div>
   );
 }
