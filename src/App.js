@@ -26,7 +26,7 @@ function App() {
     }, () => {
       console.log("FaceAPI model loaded");
     });
-
+    //changes
     // Detect faces every 100ms
     const detectFace = () => {
       faceApi.detect((err, results) => {
