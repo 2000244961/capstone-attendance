@@ -1,0 +1,145 @@
+/* Card header and divider for improved UI */
+.card-header {
+	display: flex;
+	align-items: center;
+	padding-bottom: 12px;
+	margin-bottom: 18px;
+	border-bottom: 1px solid #e3e8ee;
+}
+.card-title {
+	font-size: 1.25rem;
+	font-weight: 600;
+	color: #2196F3;
+	letter-spacing: 0.5px;
+}
+.divider {
+	border: none;
+	border-top: 1px solid #e3e8ee;
+	margin: 24px 0 16px 0;
+}
+.table-wrapper {
+	overflow-x: auto;
+	border-radius: 10px;
+	background: #f9fbfd;
+	box-shadow: 0 1px 4px rgba(33,150,243,0.04);
+	padding: 8px 0;
+}
+/* Subject section management styles */
+.manage-subject-section-container {
+	padding: 2rem;
+	background: #f7fbff;
+	min-height: 100vh;
+}
+
+.page-header {
+	background: linear-gradient(90deg, #2196F3, #6dd5ed);
+	color: #fff;
+	border-radius: 12px;
+	padding: 18px 24px;
+	margin-bottom: 32px;
+	box-shadow: 0 2px 12px rgba(33,150,243,0.10);
+	font-size: 2rem;
+	display: flex;
+	align-items: center;
+}
+.page-header .icon {
+	margin-right: 12px;
+	font-size: 2.2rem;
+}
+
+.subject-section-card {
+	box-shadow: 0 4px 24px rgba(33,150,243,0.10);
+	border: 1px solid #e2e8f0;
+	background: #fff;
+	border-radius: 16px;
+	padding: 32px 24px;
+	margin-bottom: 32px;
+	position: relative;
+}
+
+.subject-section-form {
+	margin-bottom: 24px;
+}
+.form-row {
+	display: flex;
+	gap: 16px;
+	align-items: center;
+}
+.subject-section-form input {
+	padding: 8px 12px;
+	border: 1px solid #bcdffb;
+	border-radius: 6px;
+	font-size: 1rem;
+	outline: none;
+	transition: border 0.2s;
+}
+.subject-section-form input:focus {
+	border-color: #2196F3;
+}
+.add-btn {
+	background: #38b2ac;
+	color: #fff;
+	border-radius: 6px;
+	padding: 8px 20px;
+	border: none;
+	cursor: pointer;
+	font-weight: 500;
+	box-shadow: 0 2px 8px rgba(33,150,243,0.08);
+	transition: background 0.2s;
+}
+.add-btn:hover {
+	background: #2196F3;
+}
+.form-error {
+	color: #ff4757;
+	margin-top: 8px;
+	font-size: 1rem;
+}
+
+.subject-section-table {
+	width: 100%;
+	border-collapse: collapse;
+	margin-top: 12px;
+	font-size: 1.1rem;
+}
+.subject-section-table th, .subject-section-table td {
+	padding: 12px 16px;
+	text-align: left;
+}
+.subject-section-table thead tr {
+	background: #f3f6fa;
+}
+.subject-section-table tbody tr {
+	transition: background 0.2s;
+}
+.subject-section-table tbody tr:hover {
+	background: #e3f2fd;
+}
+.edit-btn {
+	background: #2196F3;
+	color: #fff;
+	border-radius: 6px;
+	padding: 6px 16px;
+	border: none;
+	cursor: pointer;
+	font-weight: 500;
+	box-shadow: 0 2px 8px rgba(33,150,243,0.08);
+	transition: background 0.2s;
+}
+.edit-btn:hover {
+	background: #1769aa;
+}
+.delete-btn {
+	background: #ff4757;
+	color: #fff;
+	border-radius: 6px;
+	padding: 6px 16px;
+	border: none;
+	cursor: pointer;
+	font-weight: 500;
+	box-shadow: 0 2px 8px rgba(255,71,87,0.08);
+	transition: background 0.2s;
+}
+.delete-btn:hover {
+	background: #c82333;
+}
