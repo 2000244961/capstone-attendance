@@ -22,6 +22,7 @@ function FaceRecognition() {
   const [subjectList, setSubjectList] = useState([]);
   const [selectedSection, setSelectedSection] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('');
+  const [scannedStudents, setScannedStudents] = useState([]); // Track scanned studentIds
   const webcamRef = useRef(null);
   const navigate = useNavigate();
 
@@ -177,11 +178,18 @@ function FaceRecognition() {
   const handleScanAuto = async (descriptor) => {
     setScanning(true);
     setResult(null);
+    // Capture webcam image as base64
+    let capturedImage = null;
+    if (webcamRef.current) {
+      capturedImage = webcamRef.current.getScreenshot();
+    }
     // Find best match among students (already filtered by section)
     let bestMatch = null;
     let bestDistance = 1.0;
     students.forEach(student => {
       if (student.descriptor && student.descriptor.length === 128) {
+        // Skip if student already scanned in this session
+        if (scannedStudents.includes(student.studentId)) return;
         const distance = faceapi.euclideanDistance(descriptor, student.descriptor);
         if (distance < bestDistance) {
           bestDistance = distance;
@@ -203,13 +211,17 @@ function FaceRecognition() {
           timestamp: new Date().toISOString(),
           date: new Date().toISOString().slice(0, 10),
           viaFacialRecognition: true,
-          recordedAt: new Date().toISOString()
+          recordedAt: new Date().toISOString(),
+          time: new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' }),
+          image: capturedImage // base64 image
         });
+        setScannedStudents(prev => [...prev, bestMatch.studentId]); // Mark as scanned
         console.log('Attendance POST response:', response);
         const scanTime = new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
         setResult({ success: true, name: bestMatch.fullName, confidence: 1 - bestDistance, scanTime });
       } catch (err) {
         if (err.response && err.response.status === 409) {
+          setScannedStudents(prev => [...prev, bestMatch.studentId]); // Mark as scanned if backend says already scanned
           setResult({ success: false, alreadyScanned: true });
         } else {
           setResult({ success: false });
@@ -217,13 +229,11 @@ function FaceRecognition() {
         console.error('Attendance save error:', err);
       }
     } else if (bestMatch && bestDistance < 0.6 && bestMatch.section === selectedSection) {
-      // This should not happen, but just in case
       setResult({ success: false });
     } else if (bestMatch && bestDistance < 0.6) {
       setResult({ success: false });
     } else {
-      // If the backend returned 409 previously, preserve alreadyScanned state
-      setResult(prev => prev && prev.alreadyScanned ? { success: false, alreadyScanned: true } : { success: false });
+      setResult({ success: false });
     }
     setScanning(false);
   };
@@ -284,7 +294,8 @@ function FaceRecognition() {
           timestamp: new Date().toISOString(),
           date: new Date().toISOString().slice(0, 10),
           viaFacialRecognition: true,
-          recordedAt: new Date().toISOString()
+          recordedAt: new Date().toISOString(),
+          time: new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' })
         });
         console.log('Attendance POST response:', response);
         const scanTime = new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });

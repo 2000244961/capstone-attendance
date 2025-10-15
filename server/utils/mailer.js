@@ -20,13 +20,15 @@ transporter.verify(function(error, success) {
   }
 });
 
-async function sendMail({ to, subject, text, html }) {
+
+async function sendMail({ to, subject, text, html, attachments }) {
   return transporter.sendMail({
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to,
     subject,
     text,
-    html
+    html,
+    attachments
   });
 }
 

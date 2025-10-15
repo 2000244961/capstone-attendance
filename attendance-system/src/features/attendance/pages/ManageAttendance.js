@@ -206,40 +206,17 @@ const ManageAttendance = () => {
     return (
         <div className="manage-attendance-container" style={{ backgroundColor: '#43a047' }}>
             <div className="page-header">
-                <div className="header-top">
-                    <h1>📋 Manage Attendance</h1>
+                <div className="header-top" style={{ justifyContent: 'flex-start', gap: '24px' }}>
                     <button 
                         onClick={() => navigate(-1)} 
                         className="back-button"
-                        style={{
-                            backgroundColor: '#2196F3',
-                            color: 'white',
-                            border: 'none',
-                            padding: '10px 20px',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            fontSize: '15px',
-                            marginLeft: '20px',
-                            fontWeight: 600
-                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                     >
-                        ← Back
+                        <span style={{ fontSize: '1.2em' }}>←</span> Back
                     </button>
+                    <h1 style={{ marginLeft: 0 }}>📋 Manage Attendance</h1>
                 </div>
-                <div className="real-time-status">
-                    <div className="status-indicator live">
-                        <span className="status-dot"></span>
-                        <span>Live Updates Active</span>
-                    </div>
-                    <div className="last-update">
-                        Last updated: {new Date(lastUpdate).toLocaleTimeString('en-US', { 
-                            hour12: true, 
-                            hour: '2-digit', 
-                            minute: '2-digit',
-                            second: '2-digit'
-                        })}
-                    </div>
-                </div>
+                {/* Removed real-time status and last updated */}
             </div>
             {/* Filters */}
             <div className="filters-container">
@@ -385,32 +362,22 @@ const ManageAttendance = () => {
                                                     return `${y}/${m}/${d} - ${hour}:${min} ${ampm}`;
                                                 })()}</td>
                                                 <td>
-                                                    <select
-                                                        value={record.status}
-                                                        onChange={(e) => handleStatusChange(record._id, e.target.value)}
-                                                        className="status-select"
+                                                    <button
+                                                        onClick={() => alert('Edit functionality coming soon!')}
+                                                        className="delete-button"
+                                                        title="Edit Record"
+                                                        style={{ marginRight: '6px', display: 'flex', alignItems: 'center', gap: '4px', background: '#1976d2' }}
                                                     >
-                                                        <option value="Present">Present</option>
-                                                        <option value="Late">Late</option>
-                                                        <option value="Absent">Absent</option>
-                                                    </select>
+                                                        <span role="img" aria-label="edit">✏️</span> Edit
+                                                    </button>
                                                     <button
                                                         onClick={() => handleDeleteRecord(record._id)}
                                                         className="delete-button"
                                                         title="Delete Record"
+                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
                                                     >
-                                                        🗑️ Delete
+                                                        <span role="img" aria-label="delete">🗑️</span> Delete
                                                     </button>
-                                                    {recIdx === 0 && (
-                                                        <button
-                                                            onClick={() => handleDeleteAllAttendanceForStudent(student.studentId, student.name)}
-                                                            className="delete-all-button"
-                                                            title="Delete All Attendance Records"
-                                                            style={{ marginLeft: '8px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer' }}
-                                                        >
-                                                            🗑️ Delete All
-                                                        </button>
-                                                    )}
                                                 </td>
                                             </tr>
                                         ))}

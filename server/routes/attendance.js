@@ -36,7 +36,7 @@ router.get('/', async (req, res) => {
 // Add a new attendance record
 router.post('/', async (req, res) => {
   try {
-    console.log('Received attendance POST:', req.body);
+  console.log('Received attendance POST:', req.body);
     const { studentId, date, name, section, subject } = req.body;
     // Check for existing record for this student, subject, and date
     const existing = await Attendance.findOne({ studentId, subject, date });
@@ -52,12 +52,46 @@ router.post('/', async (req, res) => {
     // Notify parent by email (if found)
     try {
       const parentEmail = await findParentEmailByStudentId(studentId);
+      // Use provided time or current time if not present
+      let scanTime = req.body.time;
+      let formattedTime = '';
+      console.log('Scan time received from frontend:', scanTime);
+      if (scanTime) {
+        // If scanTime is already in HH:mm AM/PM format, use as is
+        if (/\d{1,2}:\d{2} (AM|PM)/.test(scanTime)) {
+          formattedTime = scanTime;
+        } else {
+          // Try to parse as time string
+          const dateObj = new Date(`${date}T${scanTime}`);
+          if (!isNaN(dateObj.getTime())) {
+            formattedTime = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+          } else {
+            formattedTime = scanTime;
+          }
+        }
+      } else {
+        formattedTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+      }
       if (parentEmail) {
+        // If image is present, attach as inline image
+        let attachments = undefined;
+        let htmlContent = `<p>Dear Parent,</p><p>Your child <b>${name}</b> has been marked <b>present</b> for section <b>${section}</b> and subject <b>${subject}</b> on <b>${date}</b> at <b>${formattedTime}</b>.</p>`;
+        if (req.body.image) {
+          attachments = [{
+            filename: 'student.jpg',
+            content: req.body.image.split(',')[1],
+            encoding: 'base64',
+            cid: 'studentphoto@attendance'
+          }];
+          htmlContent += `<p><img src="cid:studentphoto@attendance" alt="Student Photo" style="max-width:200px;max-height:200px;border-radius:8px;" /></p>`;
+        }
+        htmlContent += '<p>Thank you.</p>';
         await sendMail({
           to: parentEmail,
           subject: `Attendance Notification for ${name}`,
-          text: `Dear Parent,\n\nYour child ${name} has been marked present for section ${section} and subject ${subject} on ${date}.\n\nThank you.`,
-          html: `<p>Dear Parent,</p><p>Your child <b>${name}</b> has been marked <b>present</b> for section <b>${section}</b> and subject <b>${subject}</b> on <b>${date}</b>.</p><p>Thank you.</p>`
+          text: `Dear Parent,\n\nYour child ${name} has been marked present for section ${section} and subject ${subject} on ${date} at ${formattedTime}.\n\nThank you.`,
+          html: htmlContent,
+          attachments
         });
         console.log('Parent notified by email:', parentEmail);
       } else {

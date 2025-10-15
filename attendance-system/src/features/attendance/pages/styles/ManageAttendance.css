@@ -1,11 +1,12 @@
 /* Modern Blue Theme for ManageAttendance */
+/* Improved color combination for a fresher look */
 .manage-attendance-container {
   max-width: 1200px;
   margin: 32px auto;
   padding: 32px 24px 64px 24px;
-  background: #e3f2fd;
+  background: #f7fafc;
   border-radius: 18px;
-  box-shadow: 0 4px 24px rgba(33, 150, 243, 0.10);
+  box-shadow: 0 4px 24px rgba(33, 82, 243, 0.10);
   min-height: 100vh;
   border: none;
   animation: fadeIn 0.7s;
@@ -17,11 +18,11 @@
 
 .page-header {
   margin-bottom: 32px;
-  background: linear-gradient(90deg, #2196F3 80%, #1769aa 100%);
+  background: linear-gradient(90deg, #1976d2 80%, #0d47a1 100%);
   border-radius: 12px;
   padding: 24px 32px;
   color: #fff;
-  box-shadow: 0 2px 8px rgba(33,150,243,0.08);
+  box-shadow: 0 2px 12px rgba(25, 118, 210, 0.12);
 }
 
 .header-top {
@@ -88,9 +89,9 @@
   margin-bottom: 32px;
 }
 .summary-card {
-  background: #fff;
+  background: #e3eafc;
   border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(33,150,243,0.08);
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.10);
   padding: 18px 32px;
   flex: 1;
   display: flex;
@@ -99,27 +100,27 @@
   transition: box-shadow 0.2s, transform 0.2s;
 }
 .summary-card:hover {
-  box-shadow: 0 6px 24px rgba(33,150,243,0.18);
+  box-shadow: 0 6px 24px rgba(25, 118, 210, 0.18);
   transform: translateY(-4px) scale(1.03);
 }
 .summary-icon {
   font-size: 2.2rem;
-  color: #2196F3;
+  color: #1976d2;
 }
 .summary-content h3 {
   font-size: 2rem;
   margin: 0;
-  color: #2196F3;
+  color: #1976d2;
 }
 .summary-content p {
   margin: 0;
-  color: #555;
+  color: #333;
 }
 
 .table-container {
-  background: #fff;
+  background: #f4f7fb;
   border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(33,150,243,0.06);
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.08);
   padding: 24px;
 }
 .table-header {
@@ -146,47 +147,47 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  background: #2196F3;
+  background: #1976d2;
   color: #fff;
   font-weight: 700;
   padding: 12px 8px;
   border: none;
-  box-shadow: 0 2px 8px rgba(33,150,243,0.08);
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.10);
 }
 .attendance-table td {
   padding: 10px 8px;
-  border-bottom: 1px solid #e3eaf3;
-  background: #f9fbfd;
+  border-bottom: 1px solid #dde3ee;
+  background: #f7fafc;
 }
 .attendance-table tr {
   transition: background 0.2s;
 }
 .attendance-table tr:hover td {
-  background: #90caf9;
+  background: #e3eafc;
 }
 .attendance-table tr:nth-child(even) td {
-  background: #e3eaf3;
+  background: #f0f4fa;
 }
 .status-badge {
   padding: 6px 14px;
   border-radius: 16px;
   font-weight: 700;
   font-size: 0.95rem;
-  background: #e3eaf3;
-  color: #2196F3;
-  box-shadow: 0 1px 4px rgba(33,150,243,0.08);
+  background: #dde3ee;
+  color: #1976d2;
+  box-shadow: 0 1px 4px rgba(25, 118, 210, 0.08);
 }
 .status-present {
-  background: #c8e6c9;
-  color: #388e3c;
+  background: #b2f2d7;
+  color: #1b5e20;
 }
 .status-late {
-  background: #fff9c4;
-  color: #fbc02d;
+  background: #fff3cd;
+  color: #b28704;
 }
 .status-absent {
-  background: #ffcdd2;
-  color: #d32f2f;
+  background: #ffd6d6;
+  color: #b71c1c;
 }
 .action-buttons {
   display: flex;
