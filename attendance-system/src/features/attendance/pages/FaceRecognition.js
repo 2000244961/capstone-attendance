@@ -31,12 +31,12 @@ function FaceRecognition() {
     let teacherId = null;
     let assignedSections = [];
     let assignedSubjects = [];
-    try {
-      const teacherData = JSON.parse(localStorage.getItem('currentUser'));
-      if (teacherData && (teacherData.username || teacherData._id)) {
-        teacherId = teacherData._id || teacherData.username;
-      }
-    } catch {}
+    // TODO: Replace with a prop, context, or backend session fetch
+    // For now, try to get teacherId from a global or context (not localStorage)
+    // Example: window.currentUser or from a React context
+    if (window.currentUser && (window.currentUser.username || window.currentUser._id)) {
+      teacherId = window.currentUser._id || window.currentUser.username;
+    }
     const fetchAndFilter = async () => {
       let profile = null;
       if (teacherId) {
@@ -200,8 +200,6 @@ function FaceRecognition() {
     // Save attendance to backend if a match is found
     if (bestMatch && bestDistance < 0.6 && bestMatch.section === selectedSection) {
       try {
-        localStorage.setItem('lastAttendanceSubject', selectedSubject);
-        localStorage.setItem('lastAttendanceSection', selectedSection);
         const response = await addAttendance({
           name: bestMatch.fullName,
           studentId: bestMatch.studentId,
@@ -212,7 +210,7 @@ function FaceRecognition() {
           date: new Date().toISOString().slice(0, 10),
           viaFacialRecognition: true,
           recordedAt: new Date().toISOString(),
-          time: new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' }),
+          time: new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
           image: capturedImage // base64 image
         });
         setScannedStudents(prev => [...prev, bestMatch.studentId]); // Mark as scanned

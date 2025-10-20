@@ -22,6 +22,10 @@ app.use(cors());
 app.use(express.json());
 // Serve uploads folder as static files, but force download for all files
 const path = require('path');
+
+// Serve uploads folder as static files for direct access
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Force download for /uploads/:filename (optional, for explicit download)
 app.get('/uploads/:filename', (req, res) => {
   const filePath = path.join(__dirname, 'uploads', req.params.filename);
   res.download(filePath);
@@ -76,7 +80,14 @@ app.use('/api/attendance', (req, res, next) => {
   req.io = io;
   next();
 }, require('./routes/attendance'));
-app.use('/api/user', require('./routes/user'));
+// Mount debug attendance route
+app.use('/api/attendance', require('./routes/attendanceDebug'));
+const userRoutes = require('./routes/user');
+app.use('/api/user', userRoutes);
+// Mount /api/announcement route
+if (userRoutes.announcementRouter) {
+  app.use('/api/announcement', userRoutes.announcementRouter);
+}
 app.use('/api/student', require('./routes/student'));
 app.use('/api/subjectSection', require('./routes/subjectSection'));
 app.use('/api/message', require('./routes/message'));

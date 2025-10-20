@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useUser } from '../../../shared/UserContext';
 import { useNavigate } from 'react-router-dom';
 import { useDashboardData } from '../../../shared/useDashboard';
 import { useNotifications } from '../../../shared/hooks/useNotifications';
@@ -9,6 +10,7 @@ import './styles/DashboardAdmin.css';
 
 function DashboardAdmin() {
   const navigate = useNavigate();
+  const { user: currentUser } = useUser();
   const { data: dashboardData, refresh: refreshDashboard } = useDashboardData(30000);
   const [activeSection, setActiveSection] = useState('overview');
   // Notification system

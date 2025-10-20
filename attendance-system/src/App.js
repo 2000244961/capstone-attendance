@@ -1,6 +1,7 @@
 
 
 import React from 'react';
+import { UserProvider } from './shared/UserContext';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
 // Initialize notification data
@@ -19,68 +20,70 @@ import ProtectedRoute from './features/auth/components/ProtectedRoute';
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Login />} />
-        <Route path="/login" element={<Login />} />
-        <Route 
-          path="/dashboard" 
-          element={
-            <ProtectedRoute requiredRole="teacher">
-              <DashboardTeacher />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/admin-dashboard" 
-          element={
-            <ProtectedRoute requiredRole="admin">
-              <DashboardAdmin />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/parent-dashboard" 
-          element={
-            <ProtectedRoute requiredRole="parent">
-              <DashboardParent />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/facial-recognition" 
-          element={
-            <ProtectedRoute requiredRole="teacher">
-              <FaceRecognition />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/manage-student" 
-          element={
-            <ProtectedRoute requiredRole="teacher">
-              <ManageStudent />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/manage-attendance" 
-          element={
-            <ProtectedRoute requiredRole="teacher">
-              <ManageAttendance />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/manage-subject-section" 
-          element={
-            <ProtectedRoute requiredRole="teacher">
-              <ManageSubjectSection />
-            </ProtectedRoute>
-          } 
-        />
-      </Routes>
-    </Router>
+    <UserProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<Login />} />
+          <Route path="/login" element={<Login />} />
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute requiredRole="teacher">
+                <DashboardTeacher />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/admin-dashboard" 
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <DashboardAdmin />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/parent-dashboard" 
+            element={
+              <ProtectedRoute requiredRole="parent">
+                <DashboardParent />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/facial-recognition" 
+            element={
+              <ProtectedRoute requiredRole="teacher">
+                <FaceRecognition />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/manage-student" 
+            element={
+              <ProtectedRoute requiredRole="teacher">
+                <ManageStudent />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/manage-attendance" 
+            element={
+              <ProtectedRoute requiredRole="teacher">
+                <ManageAttendance />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/manage-subject-section" 
+            element={
+              <ProtectedRoute requiredRole="teacher">
+                <ManageSubjectSection />
+              </ProtectedRoute>
+            } 
+          />
+        </Routes>
+      </Router>
+    </UserProvider>
   );
 }
 

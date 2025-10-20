@@ -5,6 +5,9 @@ import { fetchSubjectSections, addSubjectSection, deleteSubjectSection } from '.
 
 function ManageSubjectSection() {
   const [subjectSections, setSubjectSections] = useState([]);
+  const [selectedSection, setSelectedSection] = useState('');
+  // Get unique sections for dropdown
+  const sectionOptions = Array.from(new Set(subjectSections.map(s => s.section))).filter(Boolean);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [form, setForm] = useState({ section: '', subject: '' });
@@ -49,6 +52,15 @@ function ManageSubjectSection() {
       setFormError('Both fields are required.');
       return;
     }
+    // Check for duplicate section/subject
+    const exists = subjectSections.some(
+      item => item.section.trim().toLowerCase() === form.section.trim().toLowerCase() &&
+              item.subject.trim().toLowerCase() === form.subject.trim().toLowerCase()
+    );
+    if (exists) {
+      setFormError('This section and subject combination already exists.');
+      return;
+    }
     setFormLoading(true);
     try {
       await addSubjectSection(form);
@@ -70,7 +82,7 @@ function ManageSubjectSection() {
           <span className="card-title">Add New Subject/Section</span>
         </div>
         <form className="subject-section-form" onSubmit={handleFormSubmit}>
-          <div className="form-row">
+          <div className="form-row" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <input
               name="section"
               type="text"
@@ -92,6 +104,18 @@ function ManageSubjectSection() {
             <button type="submit" className="add-btn" disabled={formLoading}>
               {formLoading ? 'Adding...' : 'Add'}
             </button>
+            <label htmlFor="sectionDropdown" style={{ fontWeight: 600, marginLeft: 12 }}>Filter by Section:</label>
+            <select
+              id="sectionDropdown"
+              value={selectedSection}
+              onChange={e => setSelectedSection(e.target.value)}
+              style={{ padding: '6px 12px', borderRadius: 6 }}
+            >
+              <option value="">All Sections</option>
+              {sectionOptions.map((section, idx) => (
+                <option key={section + idx} value={section}>{section}</option>
+              ))}
+            </select>
           </div>
           {formError && <div className="form-error">{formError}</div>}
         </form>
@@ -114,16 +138,18 @@ function ManageSubjectSection() {
                 {subjectSections.length === 0 ? (
                   <tr><td colSpan="3" style={{textAlign:'center'}}>No subject/sections found.</td></tr>
                 ) : (
-                  subjectSections.map((item, idx) => (
-                    <tr key={item._id || idx}>
-                      <td>{item.section || '-'}</td>
-                      <td>{item.subject || '-'}</td>
-                      <td>
-                        <button className="edit-btn">Edit</button>
-                        <button className="delete-btn" onClick={() => handleDelete(item._id)} style={{marginLeft:8}}>Delete</button>
-                      </td>
-                    </tr>
-                  ))
+                  subjectSections
+                    .filter(item => !selectedSection || item.section === selectedSection)
+                    .map((item, idx) => (
+                      <tr key={item._id || idx}>
+                        <td>{item.section || '-'}</td>
+                        <td>{item.subject || '-'}</td>
+                        <td>
+                          <button className="edit-btn">Edit</button>
+                          <button className="delete-btn" onClick={() => handleDelete(item._id)} style={{marginLeft:8}}>Delete</button>
+                        </td>
+                      </tr>
+                    ))
                 )}
               </tbody>
             </table>

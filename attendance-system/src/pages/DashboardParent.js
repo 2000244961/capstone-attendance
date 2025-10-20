@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useUser } from '../shared/UserContext';
 import NotificationIcon from '../shared/components/NotificationIcon';
+import InboxIcon from '../shared/components/InboxIcon';
 import NotificationDropdown from '../shared/components/NotificationDropdown';
 import { fetchInbox, sendExcuseLetter, fetchSentMessages } from '../api/messageApi';
 import { fetchAllTeachers } from '../api/userApi';
@@ -19,8 +21,8 @@ function DashboardParent() {
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  // Get current parent user from localStorage
-  const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+  // Get current parent user from React context
+  const { user: currentUser } = useUser();
   const parentName = currentUser?.fullName || currentUser?.name || currentUser?.username || 'Parent';
   // Example parent state
   const [linkedStudents, setLinkedStudents] = useState([]);
@@ -48,13 +50,8 @@ function DashboardParent() {
       return;
     }
     setExcuseStatus('Submitting...');
-  // Debug: log teacherId and form
-  console.log('[PARENT] Submitting excuse letter to teacherId:', excuseForm.teacherId, 'form:', excuseForm);
-  console.log('[PARENT] Current user:', currentUser);
-  // Also log all teachers for dropdown
-  console.log('[PARENT] Teachers list:', teachers);
     try {
-      await sendExcuseLetter({
+      const result = await sendExcuseLetter({
         senderId: currentUser._id,
         senderRole: 'parent',
         recipientId: excuseForm.teacherId,
@@ -63,11 +60,26 @@ function DashboardParent() {
         excuseDate: new Date().toISOString().slice(0, 10),
         subject: 'Excuse Letter'
       });
+      // Immediately add the new excuse letter to the list for instant feedback
+      const newLetter = {
+        _id: result?._id || Math.random().toString(36).slice(2),
+        content: excuseForm.reason,
+        recipient: excuseForm.teacherId,
+        sender: currentUser._id,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        approverName: '',
+        type: 'excuse_letter',
+      };
+  setExcuseLetters(prev => [newLetter, ...prev]);
+  setParentSent(prev => [newLetter, ...prev]);
       setExcuseStatus('Submitted!');
       setExcuseForm({ reason: '', file: null, teacherId: '' });
-      // Fetch sent messages after submit
-      fetchParentSentExcuseLetters();
-      setTimeout(() => setExcuseStatus(''), 2000);
+      // Optionally refresh from backend after a short delay
+      setTimeout(() => {
+        fetchParentSentExcuseLetters();
+        setExcuseStatus('');
+      }, 2000);
     } catch (err) {
       setExcuseStatus('Failed to submit: ' + err.message);
     }
@@ -118,9 +130,15 @@ function DashboardParent() {
     if (!currentUser || !currentUser._id) return;
     try {
       const sent = await fetchSentMessages(currentUser._id);
-      setExcuseLetters(sent.filter(msg => msg.type === 'excuse_letter'));
+      // Merge backend and local excuseLetters, deduplicating by _id
+      setExcuseLetters(prev => {
+        const backendLetters = sent.filter(msg => msg.type === 'excuse_letter');
+        const prevMap = new Map(prev.map(l => [l._id, l]));
+        backendLetters.forEach(l => prevMap.set(l._id, l));
+        return Array.from(prevMap.values());
+      });
     } catch {
-      setExcuseLetters([]);
+      setExcuseLetters(prev => [...prev]); // keep local if backend fails
     }
   }
 
@@ -166,8 +184,10 @@ function DashboardParent() {
   const [parentInbox, setParentInbox] = useState([]);
   const [parentInboxLoading, setParentInboxLoading] = useState(false);
   const [parentInboxError, setParentInboxError] = useState('');
+  const [inboxView, setInboxView] = useState('received'); // 'received' or 'sent'
+  const [parentSent, setParentSent] = useState([]);
 
-  // Fetch parent inbox messages
+  // Fetch parent inbox messages (received)
   useEffect(() => {
     async function fetchParentInbox() {
       if (!currentUser || !currentUser._id) return;
@@ -186,15 +206,68 @@ function DashboardParent() {
     fetchParentInbox();
   }, [currentUser, unreadInboxCount]);
 
-  // Mark as read handler
+  // Fetch parent sent messages (excuse letters only)
+  useEffect(() => {
+    async function fetchParentSent() {
+      if (!currentUser || !currentUser._id) return;
+      try {
+        const sent = await fetchSentMessages(currentUser._id);
+        setParentSent(Array.isArray(sent) ? sent.filter(msg => msg.type === 'excuse_letter') : []);
+      } catch {
+        setParentSent([]);
+      }
+    }
+    fetchParentSent();
+  }, [currentUser]);
+
+  // Mark as read handler (localStorage or backend)
   async function handleMarkAsRead(msgId) {
-    try {
-      const { markMessageAsRead } = await import('../api/markMessageAsRead');
-      await markMessageAsRead(msgId);
-      // Refresh inbox and unread count
-      setParentInbox(inbox => inbox.map(m => m._id === msgId ? { ...m, status: 'read' } : m));
-      setUnreadInboxCount(c => (c > 0 ? c - 1 : 0));
-    } catch {}
+    const isValidObjectId = id => typeof id === 'string' && id.length === 24 && /^[a-fA-F0-9]+$/.test(id);
+    const msg = parentInbox.find(m => m._id === msgId);
+    if (!msg) return;
+    if (!isValidObjectId(msgId)) {
+      // LocalStorage message: update status locally
+      try {
+        const local = localStorage.getItem('adminSentMessages');
+        let arr = local ? JSON.parse(local) : [];
+        arr = arr.map(m => m._id === msgId ? { ...m, status: 'read' } : m);
+        localStorage.setItem('adminSentMessages', JSON.stringify(arr));
+      } catch {}
+      setParentInbox(prev => prev.map(m => m._id === msgId ? { ...m, status: 'read' } : m));
+    } else {
+      // Backend message: update via API
+      try {
+        const { updateMessageStatus } = await import('../api/messageApi');
+        await updateMessageStatus(msgId, 'read');
+        setParentInbox(prev => prev.map(m => m._id === msgId ? { ...m, status: 'read' } : m));
+      } catch {}
+    }
+    setUnreadInboxCount(Array.isArray(parentInbox) ? parentInbox.filter(msg => msg.status !== 'read').length : 0);
+  }
+  // Delete message handler for parent inbox (localStorage or backend)
+  async function handleDeleteParentInboxMessage(msgId) {
+    if (!window.confirm('Are you sure you want to delete this message?')) return;
+    const isValidObjectId = id => typeof id === 'string' && id.length === 24 && /^[a-fA-F0-9]+$/.test(id);
+    if (!isValidObjectId(msgId)) {
+      // LocalStorage message: remove from localStorage
+      try {
+        const local = localStorage.getItem('adminSentMessages');
+        let arr = local ? JSON.parse(local) : [];
+        arr = arr.filter(m => m._id !== msgId);
+        localStorage.setItem('adminSentMessages', JSON.stringify(arr));
+      } catch {}
+      setParentInbox(msgs => msgs.filter(m => m._id !== msgId));
+    } else {
+      // Backend message: delete via API
+      try {
+        const { deleteMessage } = await import('../api/messageApi');
+        await deleteMessage(msgId);
+        setParentInbox(msgs => msgs.filter(m => m._id !== msgId));
+      } catch (err) {
+        alert('Failed to delete message: ' + err.message);
+      }
+    }
+    setUnreadInboxCount(Array.isArray(parentInbox) ? parentInbox.filter(msg => msg.status !== 'read').length : 0);
   }
 
   return (
@@ -209,73 +282,136 @@ function DashboardParent() {
         </nav>
       </aside>
       <div style={{flex:1}}>
-        <header className="parent-header">
-          <h1>Parent Dashboard</h1>
-          <div style={{ fontSize: '1.2rem', fontWeight: 500, marginBottom: 8 }}>Welcome, {parentName}</div>
-          <div style={{ display: 'inline-block', position: 'relative' }}>
-            <NotificationIcon unreadCount={notifications.filter(n => !n.isRead).length} onClick={() => setShowNotifications(v => !v)} />
-            <NotificationDropdown
-              notifications={notifications}
-              isOpen={showNotifications}
-              onClose={() => setShowNotifications(false)}
-              onMarkAsRead={id => setNotifications(n => n.map(msg => msg.id === id ? { ...msg, isRead: true } : msg))}
-              onMarkAllAsRead={() => setNotifications(n => n.map(msg => ({ ...msg, isRead: true })))}
-              onDelete={id => {
-                setNotifications(n => n.filter(msg => msg.id !== id));
-                // Optionally, call backend to delete the message for this user
-                // Example: deleteMessage(id);
-              }}
-            />
+        <header className="parent-header" style={{
+          background: 'linear-gradient(90deg, #010662 0%, #38b2ac 100%)',
+          color: '#fff',
+          padding: '24px 32px 18px 32px',
+          borderBottom: '1px solid #e3e3e3',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
+          position: 'relative',
+          zIndex: 2
+        }}>
+          <div style={{display:'flex',alignItems:'center',width:'100%'}}>
+            <h1 style={{fontSize:'2rem',fontWeight:700,margin:0,letterSpacing:'0.5px'}}>Parent Dashboard</h1>
+            <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:18}}>
+              <div style={{position:'relative'}}>
+                <NotificationIcon unreadCount={notifications.filter(n => !n.isRead).length} onClick={() => setShowNotifications(v => !v)} />
+                <InboxIcon unreadCount={unreadInboxCount} onClick={() => setActiveSidebar('inbox')} />
+                <NotificationDropdown
+                  notifications={notifications}
+                  isOpen={showNotifications}
+                  onClose={() => setShowNotifications(false)}
+                  onMarkAsRead={id => setNotifications(n => n.map(msg => msg.id === id ? { ...msg, isRead: true } : msg))}
+                  onMarkAllAsRead={() => setNotifications(n => n.map(msg => ({ ...msg, isRead: true })))}
+                  onDelete={id => {
+                    setNotifications(n => n.filter(msg => msg.id !== id));
+                  }}
+                />
+              </div>
+              <button className="dashboard-btn" onClick={() => setShowProfile(true)} style={{background:'#fff',color:'#010662',fontWeight:600,padding:'8px 18px',borderRadius:6,border:'none',boxShadow:'0 2px 8px rgba(1,6,98,0.08)',marginLeft:8}}>View Profile</button>
+            </div>
           </div>
-          {/* Show unread inbox message count (not notifications) */}
-          <div style={{marginTop:8,marginBottom:8,fontSize:'1rem',color:'#3182ce',fontWeight:500}}>
-            Unread Messages: {unreadInboxCount}
+          <div style={{ fontSize: '1.2rem', fontWeight: 500, marginTop: 8, marginBottom: 4 }}>Welcome, {parentName}</div>
+          <div style={{marginTop:4,fontSize:'1rem',color:'#e0e8f3',fontWeight:500}}>
+            Unread Messages: <span style={{color:'#ffd700'}}>{unreadInboxCount}</span>
           </div>
-          <button className="dashboard-btn" onClick={() => setShowProfile(true)} style={{marginLeft:16}}>View Profile</button>
         </header>
         <div className="parent-main-content">
           {activeSidebar === 'inbox' ? (
             <section className="parent-inbox-section" style={{marginBottom:32}}>
               <h2>Inbox</h2>
-              {parentInboxLoading ? (
-                <div>Loading...</div>
-              ) : parentInboxError ? (
-                <div style={{color:'red'}}>{parentInboxError}</div>
-              ) : parentInbox.length === 0 ? (
-                <div>No messages in your inbox.</div>
-              ) : (
-                <div style={{display:'flex',flexDirection:'column',gap:18}}>
-                  {parentInbox.map(msg => (
-                    <div key={msg._id} style={{background:'#fff',borderRadius:10,padding:'18px 24px',boxShadow:'0 2px 8px rgba(33,150,243,0.07)',textAlign:'left',marginBottom:8}}>
-                      <div style={{fontWeight:700,color:'#2b6cb0',marginBottom:4}}>
-                        {msg.type === 'excuse_letter' ? 'Excuse Letter' : 'Message'} from{' '}
-                        {msg.sender?.id || 'Unknown'}
-                      </div>
-                      <div style={{fontSize:'1.05rem',color:'#333',marginBottom:6}}>{msg.content}</div>
-                      <div style={{fontSize:'0.98rem',color:'#888'}}>Status: <b>{msg.status}</b>
-                        {msg.status === 'approved' && (
-                          <span style={{color:'#38a169',marginLeft:8}}>
-                            (Approved by: {
-                              msg.approverName
-                                ? msg.approverName
-                                : (
-                                    teachers.find(t => t._id === (msg.sender?.id || msg.sender))?.fullName ||
-                                    teachers.find(t => t._id === (msg.recipient?.id || msg.recipient))?.fullName ||
-                                    'Unknown'
-                                  )
-                            })
-                          </span>
-                        )}
-                      </div>
-                      <div style={{fontSize:'0.92rem',color:'#aaa'}}>Received: {new Date(msg.createdAt).toLocaleString()}</div>
-                      <div style={{marginTop:10,display:'flex',gap:12}}>
-                        {msg.status === 'unread' && (
-                          <button onClick={() => handleMarkAsRead(msg._id)} style={{background:'#3182ce',color:'#fff',border:'none',borderRadius:6,padding:'6px 16px',fontWeight:600,cursor:'pointer'}}>Mark as Read</button>
-                        )}
-                      </div>
+              <div style={{display:'flex',gap:12,marginBottom:18}}>
+                <button
+                  className="dashboard-btn"
+                  style={{background:inboxView==='received'?'#3182ce':'#fff',color:inboxView==='received'?'#fff':'#3182ce',fontWeight:700}}
+                  onClick={()=>setInboxView('received')}
+                >Received</button>
+                <button
+                  className="dashboard-btn"
+                  style={{background:inboxView==='sent'?'#3182ce':'#fff',color:inboxView==='sent'?'#fff':'#3182ce',fontWeight:700}}
+                  onClick={()=>setInboxView('sent')}
+                >Sent</button>
+              </div>
+              {inboxView === 'received' ? (
+                parentInboxLoading ? (
+                  <div>Loading...</div>
+                ) : parentInboxError ? (
+                  <div style={{color:'red'}}>{parentInboxError}</div>
+                ) : parentInbox.length === 0 ? (
+                  <div>No messages in your inbox.</div>
+                ) : (
+                  <div style={{display:'flex',flexDirection:'column',gap:18}}>
+                    {parentInbox.map(msg => (
+                      <div key={msg._id} style={{background:'#fff',borderRadius:10,padding:'18px 24px',boxShadow:'0 2px 8px rgba(33,150,243,0.07)',textAlign:'left',marginBottom:8}}>
+                        <div style={{fontWeight:700,color:'#2b6cb0',marginBottom:4}}>
+                          {msg.type === 'excuse_letter' ? 'Excuse Letter' : 'Message'} from{' '}
+                          {/* Show teacher name if excuse letter and sender is teacher */}
+                          {msg.type === 'excuse_letter' && (msg.approverName || (teachers.find(t => t._id === (msg.sender?.id || msg.sender))?.fullName))
+                            ? (msg.approverName || teachers.find(t => t._id === (msg.sender?.id || msg.sender))?.fullName)
+                            : (msg.sender?.id || 'Unknown')}
+                          </div>
+                          <div style={{fontSize:'1.05rem',color:'#333',marginBottom:6}}>{msg.content}</div>
+                          <div style={{fontSize:'0.98rem',color:'#888'}}>Status: <b>{msg.status}</b>
+                            {msg.status === 'approved' && (
+                              <span style={{color:'#38a169',marginLeft:8}}>
+                                (Approved by: {
+                                  msg.approverName
+                                    ? msg.approverName
+                                    : (
+                                        teachers.find(t => t._id === (msg.sender?.id || msg.sender))?.fullName ||
+                                        teachers.find(t => t._id === (msg.recipient?.id || msg.recipient))?.fullName ||
+                                        'Unknown'
+                                      )
+                                })
+                              </span>
+                            )}
+                          </div>
+                          <div style={{fontSize:'0.92rem',color:'#aaa'}}>Received: {new Date(msg.createdAt).toLocaleString()}</div>
+                          <div style={{marginTop:10,display:'flex',gap:12}}>
+                            {msg.status === 'unread' && (
+                              <button onClick={() => handleMarkAsRead(msg._id)} style={{background:'#3182ce',color:'#fff',border:'none',borderRadius:6,padding:'6px 16px',fontWeight:600,cursor:'pointer'}}>Mark as Read</button>
+                            )}
+                            <button onClick={() => handleDeleteParentInboxMessage(msg._id)} style={{background:'#fff',color:'#e53e3e',border:'1px solid #e53e3e',borderRadius:6,padding:'6px 16px',fontWeight:600,cursor:'pointer'}}>Delete</button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                )
+              ) : (
+                parentSent.length === 0 ? (
+                  <div>No sent excuse letters.</div>
+                ) : (
+                  <div style={{display:'flex',flexDirection:'column',gap:18}}>
+                    {parentSent.map(msg => (
+                      <div key={msg._id} style={{background:'#f7fafc',borderRadius:10,padding:'18px 24px',boxShadow:'0 2px 8px rgba(33,150,243,0.07)',textAlign:'left',marginBottom:8}}>
+                        <div style={{fontWeight:700,color:'#2b6cb0',marginBottom:4}}>
+                          Excuse Letter to{' '}
+                          {/* Show teacher name for sent excuse letter */}
+                          {teachers.find(t => t._id === (msg.recipient?.id || msg.recipient))?.fullName || 'Unknown'}
+                        </div>
+                        <div style={{fontSize:'1.05rem',color:'#333',marginBottom:6}}>{msg.content}</div>
+                        <div style={{fontSize:'0.98rem',color:'#888'}}>Status: <b>{msg.status}</b>
+                          {msg.status === 'approved' && (
+                            <span style={{color:'#38a169',marginLeft:8}}>
+                              (Approved by: {
+                                msg.approverName
+                                  ? msg.approverName
+                                  : (
+                                      teachers.find(t => t._id === (msg.sender?.id || msg.sender))?.fullName ||
+                                      teachers.find(t => t._id === (msg.recipient?.id || msg.recipient))?.fullName ||
+                                      'Unknown'
+                                    )
+                              })
+                            </span>
+                          )}
+                        </div>
+                        <div style={{fontSize:'0.92rem',color:'#aaa'}}>Sent: {new Date(msg.createdAt).toLocaleString()}</div>
+                      </div>
+                    ))}
+                  </div>
+                )
               )}
             </section>
           ) : activeSidebar === 'excuse' ? (
@@ -316,7 +452,8 @@ function DashboardParent() {
                           <td>
                             {letter.approverName
                               ? <span style={{color:'#38b2ac',fontWeight:600}}>Approved by: {letter.approverName}</span>
-                              : (teachers.find(t => t._id === (letter.recipient?.id || letter.recipient))?.fullName || 'N/A')}
+                              : (teachers.find(t => t._id === (letter.recipient?.id || letter.recipient))?.fullName ||
+                                 teachers.find(t => t._id === (letter.sender?.id || letter.sender))?.fullName || 'Unknown')}
                           </td>
                           <td>
                             {letter.status}
@@ -357,6 +494,23 @@ function DashboardParent() {
                               {(student.recentAttendance||[]).slice(-7).map((att,i) => (
                                 <span key={i} style={{width:22,height:22,borderRadius:'50%',background:att==='present'?'#38b2ac':'#ff4757',display:'inline-block',color:'#fff',textAlign:'center',lineHeight:'22px',fontWeight:700}}>{att==='present'?'P':'A'}</span>
                               ))}
+                            </div>
+                          </div>
+                          <div style={{marginTop:12}}>
+                            <strong>Teachers in Section:</strong>
+                            <div style={{marginTop:4}}>
+                              {teachers.filter(t => Array.isArray(t.assignedSections) && t.assignedSections.includes(student.section)).length === 0 ? (
+                                <span style={{color:'#888'}}>No teachers found for this section.</span>
+                              ) : (
+                                teachers.filter(t => Array.isArray(t.assignedSections) && t.assignedSections.includes(student.section)).map(t => (
+                                  <div key={t._id} style={{color:'#3182ce',fontWeight:600,marginBottom:4}}>
+                                    {t.fullName || t.name || t.username}
+                                    <div style={{fontSize:'0.98rem',color:'#555',marginLeft:8}}>
+                                      Contact: {t.contact || 'N/A'}
+                                    </div>
+                                  </div>
+                                ))
+                              )}
                             </div>
                           </div>
                         </div>

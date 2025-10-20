@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useUser } from '../shared/UserContext';
 import NotificationIcon from '../shared/components/NotificationIcon';
 import NotificationDropdown from '../shared/components/NotificationDropdown';
 import InboxIcon from '../shared/components/InboxIcon';
@@ -30,10 +31,26 @@ async function fetchUserName(userId) {
 
 
 function DashboardAdmin() {
+  const { setUser } = useUser();
+  // Inbox view: 'received' or 'sent'
+  const [inboxView, setInboxView] = useState('received');
+  // Hamburger menu state for sidebar
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   // Announcements state (persisted in localStorage)
-  const [announcements, setAnnouncements] = useState(() => {
-    return JSON.parse(localStorage.getItem('announcements')) || [];
-  });
+    const [announcements, setAnnouncements] = useState([]);
+    useEffect(() => {
+      async function fetchAnnouncements() {
+        try {
+          const res = await fetch('/api/announcement');
+          if (!res.ok) throw new Error('Failed to fetch announcements');
+          const data = await res.json();
+          setAnnouncements(data.announcements || []);
+        } catch (err) {
+          setAnnouncements([]);
+        }
+      }
+      fetchAnnouncements();
+    }, []);
   // Show/hide send message form
   const [showSendMessage, setShowSendMessage] = useState(false);
   // For specific user messaging
@@ -45,7 +62,15 @@ function DashboardAdmin() {
   const [userSearch, setUserSearch] = useState("");
 
   // Admin inbox state (must be before any useEffect that uses it)
-  const [adminInbox, setAdminInbox] = useState([]);
+    const [adminInbox, setAdminInbox] = useState(() => {
+      // Load sent messages from localStorage on mount
+      try {
+        const local = localStorage.getItem('adminSentMessages');
+        return local ? JSON.parse(local) : [];
+      } catch {
+        return [];
+      }
+    });
   const [adminInboxLoading, setAdminInboxLoading] = useState(false);
   const [adminInboxError, setAdminInboxError] = useState(null);
 
@@ -92,55 +117,106 @@ function DashboardAdmin() {
     setAdminMessageSuccess("");
     setAdminMessageSending(true);
     try {
-      // Validation
-      if (!adminMessageRecipient || !adminMessageTitle.trim() || !adminMessageContent.trim()) {
-        setAdminMessageError("Please select audience, enter a title, and a message.");
+      let currentUser = null;
+      try {
+        currentUser = JSON.parse(localStorage.getItem('currentUser'));
+      } catch (err) {
+        currentUser = null;
+      }
+      if (!currentUser || !currentUser._id) {
+        setAdminMessageError('No admin user found. Please log out and log in again.');
         setAdminMessageSending(false);
         return;
       }
-      // Get current admin user
-      const currentUser = JSON.parse(localStorage.getItem('currentUser'));
-      if (!currentUser || !currentUser._id) throw new Error('No admin user found');
-      // Send to selected group(s)
-      let recipientGroups = [];
-      if (adminMessageRecipient === 'both') recipientGroups = ['teachers', 'parents'];
-      else recipientGroups = [adminMessageRecipient];
-      let allResults = [];
-      for (const group of recipientGroups) {
-        const results = await sendAdminMessageToMany({
-          senderId: currentUser._id,
-          senderRole: 'admin',
-          recipientGroup: group,
+      if (adminMessageRecipientType === 'specific') {
+        // Inbox message to specific users
+        if (!adminMessageSpecificUsers.length || !adminMessageContent.trim()) {
+          setAdminMessageError("Please select at least one user and enter a message.");
+          setAdminMessageSending(false);
+          return;
+        }
+        // Send message to each selected user
+        let failed = 0;
+        for (const userId of adminMessageSpecificUsers) {
+          try {
+            await sendAdminMessageToMany({
+              senderId: currentUser._id,
+              senderRole: 'admin',
+              recipientUserId: userId,
+              content: adminMessageContent
+            });
+            // Add to local inbox and persist in localStorage
+            const sentMsg = {
+              _id: `sent-${Date.now()}-${userId}`,
+              sender: { id: currentUser._id, name: currentUser.fullName || 'Admin' },
+              recipient: { id: userId },
+              content: adminMessageContent,
+              createdAt: new Date().toISOString(),
+              isRead: false,
+              fromSelf: true
+            };
+            setAdminInbox(prev => [sentMsg, ...prev]);
+            try {
+              const local = localStorage.getItem('adminSentMessages');
+              const arr = local ? JSON.parse(local) : [];
+              localStorage.setItem('adminSentMessages', JSON.stringify([sentMsg, ...arr]));
+            } catch {}
+          } catch (err) {
+            failed++;
+          }
+        }
+        if (failed > 0) {
+          setAdminMessageError(`Failed to send to ${failed} user(s).`);
+        } else {
+          setAdminMessageSuccess("Message sent to selected user(s).");
+          setAdminMessageContent("");
+          setAdminMessageSpecificUsers([]);
+        }
+      } else {
+        // Announcement to group(s)
+        if (!adminMessageRecipient || !adminMessageTitle.trim() || !adminMessageContent.trim()) {
+          setAdminMessageError("Please select audience, enter a title, and a message.");
+          setAdminMessageSending(false);
+          return;
+        }
+        // Send to selected group(s)
+        let recipientGroups = [];
+        if (adminMessageRecipient === 'both') recipientGroups = ['teachers', 'parents'];
+        else recipientGroups = [adminMessageRecipient];
+        let allResults = [];
+        for (const group of recipientGroups) {
+          const results = await sendAdminMessageToMany({
+            senderId: currentUser._id,
+            senderRole: 'admin',
+            recipientGroup: group,
+            content: adminMessageContent,
+            subject: adminMessageTitle
+          });
+          allResults = allResults.concat(results);
+        }
+        // Store the announcement in localStorage for the selected audience(s) and for admin
+        const announcementObj = {
+          title: adminMessageTitle,
           content: adminMessageContent,
-          subject: adminMessageTitle
-        });
-        allResults = allResults.concat(results);
-      }
-      // Store the announcement in localStorage for the selected audience(s) and for admin
-      const announcementObj = {
-        id: `announcement-${Date.now()}`,
-        title: adminMessageTitle,
-        content: adminMessageContent,
-        createdAt: new Date().toISOString(),
-        priority: 'medium',
-        audience: adminMessageRecipient,
-        postedBy: currentUser.fullName || 'Admin',
-        readBy: [],
-      };
-      // Save for admin (table and notification icon)
-      const prevAnnouncements = JSON.parse(localStorage.getItem('announcements')) || [];
-      const newAnnouncements = [announcementObj, ...prevAnnouncements];
-      localStorage.setItem('announcements', JSON.stringify(newAnnouncements));
-      setAnnouncements(newAnnouncements);
-      // Save for selected audience(s)
-      for (const group of recipientGroups) {
-        const key = group === 'teachers' ? 'teacherNotifications' : 'parentNotifications';
-        const prev = JSON.parse(localStorage.getItem(key)) || [];
-        localStorage.setItem(key, JSON.stringify([announcementObj, ...prev]));
-      }
-      // Add the sent announcement to the admin's own inbox immediately
-      setAdminInbox(prev => [
-        {
+          createdAt: new Date().toISOString(),
+          priority: 'medium',
+          audience: adminMessageRecipient,
+          postedBy: currentUser.fullName || 'Admin',
+          readBy: [],
+        };
+        try {
+          const res = await fetch('/api/announcement', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(announcementObj)
+          });
+          if (!res.ok) throw new Error('Failed to save announcement');
+          const saved = await res.json();
+          setAnnouncements(prev => [saved.announcement, ...prev]);
+        } catch (err) {
+          setAnnouncements(prev => [announcementObj, ...prev]);
+        }
+        const sentMsg = {
           _id: `local-${Date.now()}`,
           sender: { id: currentUser._id, name: currentUser.fullName || 'Admin' },
           recipientGroup: adminMessageRecipient,
@@ -149,20 +225,25 @@ function DashboardAdmin() {
           createdAt: new Date().toISOString(),
           isRead: false,
           fromSelf: true
-        },
-        ...prev
-      ]);
-      const failed = allResults.filter(r => r.error);
-      if (failed.length > 0) {
-        setAdminMessageError(`Failed to send to ${failed.length} user(s).`);
-      } else {
-        setAdminMessageSuccess("Announcement sent to selected audience.");
-        setAdminMessageContent("");
-        setAdminMessageTitle("");
-        setAdminMessageRecipient("");
+        };
+        setAdminInbox(prev => [sentMsg, ...prev]);
+        try {
+          const local = localStorage.getItem('adminSentMessages');
+          const arr = local ? JSON.parse(local) : [];
+          localStorage.setItem('adminSentMessages', JSON.stringify([sentMsg, ...arr]));
+        } catch {}
+        const failed = allResults.filter(r => r.error);
+        if (failed.length > 0) {
+          setAdminMessageError(`Failed to send to ${failed.length} user(s).`);
+        } else {
+          setAdminMessageSuccess("Announcement sent to selected audience.");
+          setAdminMessageContent("");
+          setAdminMessageTitle("");
+          setAdminMessageRecipient("");
+        }
       }
     } catch (err) {
-      setAdminMessageError(err.message || 'Failed to send announcement.');
+      setAdminMessageError(err.message || 'Failed to send message.');
     } finally {
       setAdminMessageSending(false);
     }
@@ -412,8 +493,9 @@ function DashboardAdmin() {
       console.error('Failed to fetch users or students:', err);
     }
   };
+  // ...existing code...
   const handleLogout = () => {
-    // Implement logout logic
+    setUser(null); // Clear user context and storage
     navigate('/login');
   };
 
@@ -432,8 +514,16 @@ function DashboardAdmin() {
       ]);
       // Mark sent messages with fromSelf: true for UI
       const sentMarked = sent.map(msg => ({ ...msg, fromSelf: true }));
-      // Merge and sort by createdAt desc
-      const all = [...received, ...sentMarked].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      // Merge local sent messages from localStorage
+      let localSent = [];
+      try {
+        const local = localStorage.getItem('adminSentMessages');
+        localSent = local ? JSON.parse(local) : [];
+      } catch {}
+      // Avoid duplicates by _id
+      const all = [...localSent, ...received, ...sentMarked].filter((msg, idx, arr) =>
+        arr.findIndex(m => m._id === msg._id) === idx
+      ).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       setAdminInbox(all);
     } catch (err) {
       setAdminInboxError(err.message);
@@ -474,89 +564,172 @@ function DashboardAdmin() {
   }, []);
 
   // Delete message handler
+  // Delete message handler for admin inbox (localStorage or backend)
   const handleDeleteAdminMessage = async (id) => {
     if (!window.confirm('Are you sure you want to delete this message?')) return;
-    try {
-      await deleteMessage(id);
+    // Helper to check for valid MongoDB ObjectId
+    const isValidObjectId = id => typeof id === 'string' && id.length === 24 && /^[a-fA-F0-9]+$/.test(id);
+    if (!isValidObjectId(id)) {
+      // LocalStorage message: remove from localStorage
+      try {
+        const local = localStorage.getItem('adminSentMessages');
+        let arr = local ? JSON.parse(local) : [];
+        arr = arr.filter(m => m._id !== id);
+        localStorage.setItem('adminSentMessages', JSON.stringify(arr));
+      } catch {}
       setAdminInbox(msgs => msgs.filter(m => m._id !== id));
-    } catch (err) {
-      alert('Failed to delete message: ' + err.message);
+    } else {
+      // Backend message: delete via API
+      try {
+        await deleteMessage(id);
+        setAdminInbox(msgs => msgs.filter(m => m._id !== id));
+      } catch (err) {
+        alert('Failed to delete message: ' + err.message);
+      }
     }
   };
     return (
       <div className="admin-dashboard-container">
         {/* Sidebar */}
-        <aside className="admin-sidebar">
-          <h2 className="admin-logo">SPCC Admin Portal</h2>
-          <nav className="admin-nav">
-            <ul>
+        {/* Hamburger button */}
+        <button
+          style={{
+            position: 'fixed',
+            top: 24,
+            left: 24,
+            zIndex: 10001,
+            background: '#010662',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 8,
+            width: 48,
+            height: 48,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(1,6,98,0.10)',
+            cursor: 'pointer',
+            fontSize: 28
+          }}
+          onClick={() => setSidebarOpen(true)}
+          aria-label="Open sidebar"
+        >
+          <span style={{fontSize:32, lineHeight:0.8}}>☰</span>
+        </button>
+
+        {/* Sidebar drawer */}
+        <aside
+          className="admin-sidebar"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: sidebarOpen ? 0 : -260,
+            width: 260,
+            height: '100vh',
+            background: '#010662',
+            color: '#fff',
+            zIndex: 10000,
+            boxShadow: sidebarOpen ? '2px 0 16px rgba(1,6,98,0.10)' : 'none',
+            transition: 'left 0.3s',
+            paddingTop: 0
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 18px 0 18px' }}>
+            
+            <button
+              style={{ background: 'none', border: 'none', color: '#fff', fontSize: 28, cursor: 'pointer', marginLeft: 8 }}
+              onClick={() => setSidebarOpen(false)}
+              aria-label="Close sidebar"
+            >×</button>
+          </div>
+          <nav className="admin-nav" style={{ marginTop: 18 }}>
+            <ul style={{ color: '#fff' }}>
               <li 
                 className={activeSection === 'overview' ? 'active' : ''}
-                onClick={() => setActiveSection('overview')}
+                onClick={() => { setActiveSection('overview'); setSidebarOpen(false); }}
+                style={{ background: activeSection === 'overview' ? '#fff' : 'transparent', color: activeSection === 'overview' ? '#010662' : '#fff', fontWeight: activeSection === 'overview' ? 700 : 500, borderRadius: 8, margin: '8px 12px', padding: '12px 18px', cursor: 'pointer', transition: 'background 0.2s' }}
               >
                 📊 Dashboard Overview
               </li>
               <li
                 className={activeSection === 'inbox' ? 'active' : ''}
-                onClick={() => setActiveSection('inbox')}
+                onClick={() => { setActiveSection('inbox'); setSidebarOpen(false); }}
+                style={{ background: activeSection === 'inbox' ? '#fff' : 'transparent', color: activeSection === 'inbox' ? '#010662' : '#fff', fontWeight: activeSection === 'inbox' ? 700 : 500, borderRadius: 8, margin: '8px 12px', padding: '12px 18px', cursor: 'pointer', transition: 'background 0.2s' }}
               >
                 📥 Inbox
               </li>
               <li 
                 className={activeSection === 'users' ? 'active' : ''}
-                onClick={() => setActiveSection('users')}
+                onClick={() => { setActiveSection('users'); setSidebarOpen(false); }}
+                style={{ background: activeSection === 'users' ? '#fff' : 'transparent', color: activeSection === 'users' ? '#010662' : '#fff', fontWeight: activeSection === 'users' ? 700 : 500, borderRadius: 8, margin: '8px 12px', padding: '12px 18px', cursor: 'pointer', transition: 'background 0.2s' }}
               >
                 👥 User Management
               </li>
               <li 
                 className={activeSection === 'students' ? 'active' : ''}
-                onClick={() => setActiveSection('students')}
+                onClick={() => { setActiveSection('students'); setSidebarOpen(false); }}
+                style={{ background: activeSection === 'students' ? '#fff' : 'transparent', color: activeSection === 'students' ? '#010662' : '#fff', fontWeight: activeSection === 'students' ? 700 : 500, borderRadius: 8, margin: '8px 12px', padding: '12px 18px', cursor: 'pointer', transition: 'background 0.2s' }}
               >
                 🧑‍🎓 Manage Student
               </li>
               <li 
                 className={activeSection === 'subjectSection' ? 'active' : ''}
-                onClick={() => setActiveSection('subjectSection')}
+                onClick={() => { setActiveSection('subjectSection'); setSidebarOpen(false); }}
+                style={{ background: activeSection === 'subjectSection' ? '#fff' : 'transparent', color: activeSection === 'subjectSection' ? '#010662' : '#fff', fontWeight: activeSection === 'subjectSection' ? 700 : 500, borderRadius: 8, margin: '8px 12px', padding: '12px 18px', cursor: 'pointer', transition: 'background 0.2s' }}
               >
                 📚 Manage Subject/Section
               </li>
               <li 
                 className={activeSection === 'announcements' ? 'active' : ''}
-                onClick={() => setActiveSection('announcements')}
+                onClick={() => { setActiveSection('announcements'); setSidebarOpen(false); }}
+                style={{ background: activeSection === 'announcements' ? '#fff' : 'transparent', color: activeSection === 'announcements' ? '#010662' : '#fff', fontWeight: activeSection === 'announcements' ? 700 : 500, borderRadius: 8, margin: '8px 12px', padding: '12px 18px', cursor: 'pointer', transition: 'background 0.2s' }}
               >
                 📢 Announcements
               </li>
               <li 
                 className={activeSection === 'reports' ? 'active' : ''}
-                onClick={() => setActiveSection('reports')}
+                onClick={() => { setActiveSection('reports'); setSidebarOpen(false); }}
+                style={{ background: activeSection === 'reports' ? '#fff' : 'transparent', color: activeSection === 'reports' ? '#010662' : '#fff', fontWeight: activeSection === 'reports' ? 700 : 500, borderRadius: 8, margin: '8px 12px', padding: '12px 18px', cursor: 'pointer', transition: 'background 0.2s' }}
               >
                 📊 Reports
               </li>
-              <li 
-                className={activeSection === 'settings' ? 'active' : ''}
-                onClick={() => setActiveSection('settings')}
-              >
-                ⚙️ System Settings
-              </li>
             </ul>
           </nav>
+
         </aside>
 
+        {/* Overlay when sidebar is open */}
+        {sidebarOpen && (
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              width: '100vw',
+              height: '100vh',
+              background: 'rgba(1,6,98,0.18)',
+              zIndex: 9999,
+              transition: 'background 0.2s'
+            }}
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
         {/* Main Content */}
-        <div className="admin-main-content">
-          <header className="admin-header">
-            <div className="admin-header-row">
-              <h1 style={{margin:0, fontSize:'2rem', color:'#333', fontWeight:700}}>Admin Dashboard</h1>
-              <div className="admin-user-info">
+        <div className="admin-main-content" style={{ marginLeft: sidebarOpen ? 260 : 0, transition: 'margin-left 0.3s' }}>
+          <header className="admin-header" style={{ background: 'linear-gradient(90deg, #010662 0%, #38b2ac 100%)', color: '#fff', borderBottom: '2px solid #010662', boxShadow: '0 2px 8px rgba(1,6,98,0.08)' }}>
+            <div className="admin-header-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h2 style={{margin: '10px 0 10px 60px', fontSize:'2rem', color:'#fff', fontWeight:700, fontFamily: 'sans-serif'}}>Admin Dashboard</h2>
+              <div className="admin-user-info" style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
                 <NotificationIcon 
                   unreadCount={notifications.unreadCount}
                   onClick={notifications.toggleNotifications}
-                  color="#2196F3"
+                  color="#fff"
                 />
-                <InboxIcon onClick={() => setActiveSection('inbox')} />
+                <InboxIcon onClick={() => setActiveSection('inbox')} color="#fff" />
                 <span className="icon">👤</span>
-                <span className="username">Administrator</span>
-                <button onClick={handleLogout} className="logout-button">
+                <span className="username" style={{ color: '#fff', fontWeight: 600 }}>Administrator</span>
+                <button onClick={handleLogout} className="logout-button" style={{ background: '#ff4757', color: '#fff', fontWeight: 700, border: 'none', borderRadius: 6, padding: '8px 18px', cursor: 'pointer' }}>
                   Logout
                 </button>
               </div>
@@ -581,7 +754,37 @@ function DashboardAdmin() {
                 <h2 style={{fontWeight: 700, fontSize: 28, color: '#2d3748', marginBottom: 18, display:'flex',alignItems:'center',gap:8}}>
                   <span role="img" aria-label="inbox">📥</span> Admin Inbox
                 </h2>
-                <div style={{display:'flex',justifyContent:'flex-end',marginBottom:16}}>
+                {/* Toggle buttons for Received/Sent */}
+                <div style={{display:'flex',gap:12,marginBottom:16}}>
+                  <button
+                    onClick={() => setInboxView('received')}
+                    style={{
+                      padding:'8px 18px',
+                      background: inboxView === 'received' ? '#3182ce' : '#e2e8f0',
+                      color: inboxView === 'received' ? '#fff' : '#222',
+                      border:'none',
+                      borderRadius:6,
+                      fontWeight:600,
+                      cursor:'pointer'
+                    }}
+                  >
+                    Received
+                  </button>
+                  <button
+                    onClick={() => setInboxView('sent')}
+                    style={{
+                      padding:'8px 18px',
+                      background: inboxView === 'sent' ? '#3182ce' : '#e2e8f0',
+                      color: inboxView === 'sent' ? '#fff' : '#222',
+                      border:'none',
+                      borderRadius:6,
+                      fontWeight:600,
+                      cursor:'pointer'
+                    }}
+                  >
+                    Sent
+                  </button>
+                  <div style={{flex:1}} />
                   <button onClick={()=>setShowSendMessage(v=>!v)} className="dashboard-btn primary">
                     {showSendMessage ? 'Close' : '+ New Message'}
                   </button>
@@ -589,9 +792,7 @@ function DashboardAdmin() {
                 {showSendMessage && (
                   <div className="inbox-compose-card">
                     <h3 style={{marginBottom:12}}>Send Message</h3>
-                    {/* ...existing send message form code... */}
                     <form onSubmit={handleSendAdminMessage} style={{display:'flex',flexDirection:'column',gap:12}}>
-                      {/* ...existing code for recipient selection and textarea... */}
                       <div style={{display:'flex',gap:12,alignItems:'center'}}>
                         <label style={{fontWeight:500}}>To:</label>
                         <select value={adminMessageRecipientType} onChange={e => setAdminMessageRecipientType(e.target.value)} style={{padding:'6px 12px',borderRadius:6}} required>
@@ -686,41 +887,105 @@ function DashboardAdmin() {
                     </form>
                   </div>
                 )}
-                <button onClick={fetchAdminInbox} className="dashboard-btn secondary" style={{margin:'16px 0'}}>Refresh Inbox</button>
-                <div className="inbox-list">
+                <button onClick={fetchAdminInbox} style={{margin:'16px 0',padding:'8px 18px',background:'#3182ce',color:'#fff',border:'none',borderRadius:6,fontWeight:600,cursor:'pointer'}}>Refresh Inbox</button>
+                <div style={{background: '#f7fafc', borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.07)', padding: 24, marginTop: 24}}>
                   {adminInboxLoading ? (
-                    <div className="inbox-loading">Loading...</div>
+                    <div style={{textAlign:'center',color:'#888'}}>Loading...</div>
                   ) : adminInboxError ? (
-                    <div className="inbox-error">Error: {adminInboxError}</div>
+                    <div style={{textAlign:'center',color:'#e53e3e'}}>Error: {adminInboxError}</div>
                   ) : adminInbox.length === 0 ? (
-                    <div className="inbox-empty">No messages in your inbox.</div>
+                    <div style={{textAlign:'center',color:'#888'}}>No messages in your inbox.</div>
                   ) : (
-                    <div className="inbox-message-list">
-                      {adminInbox.map(msg => {
-                        const isSent = msg.fromSelf || (msg.sender && msg.sender.role === 'admin');
-                        const isExcuse = msg.type === 'excuse_letter';
-                        return (
-                          <div key={msg._id} className={`inbox-message-card${isSent ? ' sent' : ' received'}`}>
-                            <div className="inbox-message-header">
-                              <span className="inbox-message-icon">{isExcuse ? '📄' : (isSent ? '📤' : '📥')}</span>
-                              <span className="inbox-message-type">{isExcuse ? 'Excuse Letter' : 'Message'}</span>
-                              <span className={`inbox-message-status ${isSent ? 'sent' : 'received'}`}>{isSent ? 'Sent' : 'Received'}</span>
+                    <div style={{display:'flex',flexDirection:'column',gap:18}}>
+                      {adminInbox
+                        .filter(msg => {
+                          const isSent = msg.fromSelf || (msg.sender && msg.sender.role === 'admin');
+                          return inboxView === 'sent' ? isSent : !isSent;
+                        })
+                        .map(msg => {
+                          const isSent = msg.fromSelf || (msg.sender && msg.sender.role === 'admin');
+                          const isExcuse = msg.type === 'excuse_letter';
+                          return (
+                            <div key={msg._id} style={{
+                              background:'#fff',
+                              borderRadius:14,
+                              padding:'20px 28px',
+                              boxShadow:'0 2px 12px rgba(33,150,243,0.08)',
+                              textAlign:'left',
+                              marginBottom:8,
+                              borderLeft: isSent ? '6px solid #3182ce' : '6px solid #38a169',
+                              position:'relative',
+                              opacity:msg._id && msg._id.toString().startsWith('sent-') ? 0.7 : 1
+                            }}>
+                              <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:6}}>
+                                <span style={{fontSize:22}}>{isExcuse ? '📄' : (isSent ? '📤' : '📥')}</span>
+                                <span style={{fontWeight:700,color:'#2b6cb0',fontSize:18}}>
+                                  {isExcuse ? 'Excuse Letter' : 'Message'}
+                                </span>
+                                <span style={{
+                                  marginLeft:10,
+                                  background:isSent ? '#e3f2fd' : '#e6fffa',
+                                  color:isSent ? '#3182ce' : '#38a169',
+                                  borderRadius:8,
+                                  fontSize:13,
+                                  fontWeight:600,
+                                  padding:'2px 10px',
+                                  letterSpacing:0.5
+                                }}>{isSent ? 'Sent' : 'Received'}</span>
+                              </div>
+                              <div style={{marginBottom:8,fontSize:15}}>
+                                <span style={{color:'#888'}}>{isSent ? 'To: ' : 'From: '}</span>
+                                <span style={{color:'#222',fontWeight:500}}>
+                                  {isSent
+                                    ? (() => {
+                                        if (msg.recipient?.role === 'specific' && msg.recipient?.id) {
+                                          const ids = msg.recipient.id.split(',');
+                                          const names = ids.map(id => {
+                                            const u = userList.find(u => u._id === id);
+                                            return u ? (u.fullName || u.username || u.email || id) : id;
+                                          });
+                                          return names.join(', ');
+                                        } else if (msg.recipient?.role === 'teachers') {
+                                          return 'All Teachers';
+                                        } else if (msg.recipient?.role === 'parents') {
+                                          return 'All Parents';
+                                        } else if (msg.recipient?.role === 'both') {
+                                          return 'All Teachers & Parents';
+                                        } else if (msg.recipient?.name) {
+                                          return msg.recipient.name;
+                                        } else if (msg.recipient?.id) {
+                                          const u = userList.find(u => u._id === msg.recipient.id);
+                                          return u ? (u.fullName || u.username || u.email || msg.recipient.id) : msg.recipient.id;
+                                        } else {
+                                          return 'Unknown';
+                                        }
+                                      })()
+                                    : (senderNames[msg.sender?.id] || msg.sender?.name || 'Unknown')}
+                                </span>
+                              </div>
+                              <div style={{fontSize:'1.08rem',color:'#333',marginBottom:10,whiteSpace:'pre-line'}}>{msg.content}
+                                {isExcuse && msg.fileUrl && (
+                                  <div style={{marginTop:8}}>
+                                    <a href={msg.fileUrl} download style={{color:'#3182ce',fontWeight:600,textDecoration:'underline',fontSize:15}}>
+                                      📎 Download Excuse Letter Attachment
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                              <div style={{display:'flex',alignItems:'center',gap:18,marginTop:6}}>
+                                <span style={{fontSize:13,color:'#888'}}>
+                                  {isSent ? 'Sent' : 'Received'}: {new Date(msg.createdAt).toLocaleString()}
+                                </span>
+                                {msg.status && (
+                                  <span style={{fontSize:13,color:'#888'}}>
+                                    Status: <b style={{color:'#2b6cb0'}}>{msg.status}</b>
+                                  </span>
+                                )}
+                                <button onClick={()=>handleDeleteAdminMessage(msg._id)} style={{position:'absolute',top:18,right:18,background:'#fff',color:'#e53e3e',border:'1px solid #e53e3e',borderRadius:6,padding:'4px 12px',fontWeight:600,cursor:'pointer',fontSize:13}}>Delete</button>
+                              </div>
                             </div>
-                            <div className="inbox-message-meta">
-                              <span className="inbox-message-fromto">{isSent ? 'To:' : 'From:'}</span>
-                              <span className="inbox-message-user">{isSent
-                                ? (msg.recipient && (msg.recipient.name || recipientNames[msg.recipient.id] || msg.recipient.id))
-                                : (senderNames[msg.sender?.id] || msg.sender?.name || 'Unknown')}</span>
-                            </div>
-                            <div className="inbox-message-content">{msg.content}</div>
-                            <div className="inbox-message-footer">
-                              <span className="inbox-message-date">{isSent ? 'Sent' : 'Received'}: {new Date(msg.createdAt).toLocaleString()}</span>
-                              {msg.status && <span className="inbox-message-status-detail">Status: <b>{msg.status}</b></span>}
-                              <button onClick={()=>handleDeleteAdminMessage(msg._id)} className="inbox-message-delete">Delete</button>
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
                     </div>
                   )}
                 </div>
@@ -729,44 +994,56 @@ function DashboardAdmin() {
           {/* Dashboard Overview: Total Users Card */}
           {activeSection === 'overview' && (
             <div className="dashboard-overview-section redesigned-overview">
-              <h2 style={{fontWeight:700, fontSize:28, color:'#764ba2', marginBottom:24, display:'flex',alignItems:'center',gap:10}}>
+              <h2 style={{fontWeight:700, fontSize:28, color:'#010662', marginBottom:24, display:'flex',alignItems:'center',gap:10}}>
                 <span role="img" aria-label="dashboard">📊</span> Dashboard Overview
               </h2>
               <div className="dashboard-overview-cards redesigned-cards">
-                <div className="dashboard-card redesigned-card" style={{background:'#e3f2fd'}}>
-                  <div className="dashboard-card-icon" style={{fontSize:32, color:'#2196F3', marginBottom:8}}>👨‍🏫</div>
+                <div className="dashboard-card redesigned-card" style={{background:'#e3f2fd', border: '2px solid #010662'}}>
+                  <div className="dashboard-card-icon" style={{fontSize:32, color:'#010662', marginBottom:8}}>👨‍🏫</div>
                   <div className="dashboard-card-title">Teachers</div>
                   <div className="dashboard-card-value" style={{color:'#2196F3'}}>{userCounts.teacher}</div>
                   <div className="dashboard-card-desc">Registered teachers</div>
                 </div>
-                <div className="dashboard-card redesigned-card" style={{background:'#e6fffa'}}>
-                  <div className="dashboard-card-icon" style={{fontSize:32, color:'#38b2ac', marginBottom:8}}>👨‍👩‍👧</div>
+                <div className="dashboard-card redesigned-card" style={{background:'#e6fffa', border: '2px solid #010662'}}>
+                  <div className="dashboard-card-icon" style={{fontSize:32, color:'#010662', marginBottom:8}}>👨‍👩‍👧</div>
                   <div className="dashboard-card-title">Parents</div>
                   <div className="dashboard-card-value" style={{color:'#38b2ac'}}>{userCounts.parent}</div>
                   <div className="dashboard-card-desc">Registered parents</div>
                 </div>
-                <div className="dashboard-card redesigned-card" style={{background:'#fffbea'}}>
-                  <div className="dashboard-card-icon" style={{fontSize:32, color:'#f6ad55', marginBottom:8}}>🧑‍🎓</div>
+                <div className="dashboard-card redesigned-card" style={{background:'#fffbea', border: '2px solid #010662'}}>
+                  <div className="dashboard-card-icon" style={{fontSize:32, color:'#010662', marginBottom:8}}>🧑‍🎓</div>
                   <div className="dashboard-card-title">Students</div>
                   <div className="dashboard-card-value" style={{color:'#f6ad55'}}>{userCounts.student}</div>
                   <div className="dashboard-card-desc">Registered students</div>
                 </div>
-                <div className="dashboard-card redesigned-card" style={{background:'#ffeaea'}}>
-                  <div className="dashboard-card-icon" style={{fontSize:32, color:'#ff4757', marginBottom:8}}>📝</div>
+                <div className="dashboard-card redesigned-card" style={{background:'#ffeaea', border: '2px solid #010662'}}>
+                  <div className="dashboard-card-icon" style={{fontSize:32, color:'#010662', marginBottom:8}}>📝</div>
                   <div className="dashboard-card-title">Today's Attendance</div>
-                  <div className="dashboard-attendance-summary-row" style={{display:'flex',gap:18,justifyContent:'center',margin:'16px 0'}}>
-                    <div style={{ background: '#e6fffa', borderRadius: 10, padding: '12px 24px', boxShadow: '0 2px 8px rgba(56,178,172,0.10)', textAlign: 'center', minWidth: 80 }}>
-                      <div style={{ fontSize: '1.5rem', color: '#38b2ac', fontWeight: 700 }}>{attendanceData.present}</div>
-                      <div style={{ color: '#38b2ac', fontWeight: 600, fontSize:'1rem' }}>Present</div>
-                    </div>
-                    <div style={{ background: '#fffbea', borderRadius: 10, padding: '12px 24px', boxShadow: '0 2px 8px rgba(246,173,85,0.10)', textAlign: 'center', minWidth: 80 }}>
-                      <div style={{ fontSize: '1.5rem', color: '#f6ad55', fontWeight: 700 }}>{attendanceData.late}</div>
-                      <div style={{ color: '#f6ad55', fontWeight: 600, fontSize:'1rem' }}>Late</div>
-                    </div>
-                    <div style={{ background: '#ffeaea', borderRadius: 10, padding: '12px 24px', boxShadow: '0 2px 8px rgba(255,71,87,0.10)', textAlign: 'center', minWidth: 80 }}>
-                      <div style={{ fontSize: '1.5rem', color: '#ff4757', fontWeight: 700 }}>{attendanceData.absent}</div>
-                      <div style={{ color: '#ff4757', fontWeight: 600, fontSize:'1rem' }}>Absent</div>
-                    </div>
+                  {/* Attendance Bar Graph */}
+                  <div style={{ width: '100%', maxWidth: 320, margin: '0 auto', padding: '16px 0' }}>
+                    {(() => {
+                      const present = attendanceData.present || 0;
+                      const late = attendanceData.late || 0;
+                      const absent = attendanceData.absent || 0;
+                      const max = Math.max(present, late, absent, 1);
+                      const barHeight = 80;
+                      return (
+                        <svg width="100%" height={barHeight + 40} viewBox={`0 0 320 ${barHeight + 40}`} style={{ display: 'block', margin: '0 auto' }}>
+                          {/* Present Bar */}
+                          <rect x="30" y={barHeight - (present / max) * barHeight + 20} width="60" height={(present / max) * barHeight} fill="#38b2ac" rx="8" />
+                          <text x="60" y={barHeight + 35} textAnchor="middle" fontSize="15" fill="#010662">Present</text>
+                          <text x="60" y={barHeight - (present / max) * barHeight + 12} textAnchor="middle" fontSize="16" fontWeight="bold" fill="#222">{present}</text>
+                          {/* Late Bar */}
+                          <rect x="130" y={barHeight - (late / max) * barHeight + 20} width="60" height={(late / max) * barHeight} fill="#f6ad55" rx="8" />
+                          <text x="160" y={barHeight + 35} textAnchor="middle" fontSize="15" fill="#010662">Late</text>
+                          <text x="160" y={barHeight - (late / max) * barHeight + 12} textAnchor="middle" fontSize="16" fontWeight="bold" fill="#222">{late}</text>
+                          {/* Absent Bar */}
+                          <rect x="230" y={barHeight - (absent / max) * barHeight + 20} width="60" height={(absent / max) * barHeight} fill="#ff4757" rx="8" />
+                          <text x="260" y={barHeight + 35} textAnchor="middle" fontSize="15" fill="#010662">Absent</text>
+                          <text x="260" y={barHeight - (absent / max) * barHeight + 12} textAnchor="middle" fontSize="16" fontWeight="bold" fill="#222">{absent}</text>
+                        </svg>
+                      );
+                    })()}
                   </div>
                   <div className="dashboard-card-desc">Attendance summary for today</div>
                 </div>
@@ -1098,6 +1375,16 @@ function DashboardAdmin() {
                         <div style={{fontSize:22,fontWeight:600}}>{profileUser.fullName || profileUser.username}</div>
                         <div style={{marginTop:8,color:'#555'}}>Role: {profileUser.type}</div>
                         <div style={{marginTop:8,color:'#555'}}>Email: {profileUser.email}</div>
+                        {profileUser.type === 'teacher' && (
+                          <div style={{marginTop:8,color:'#555'}}>
+                            Contact Number: {profileUser.contact || profileUser.contactNumber || 'N/A'}
+                          </div>
+                        )}
+                        {profileUser.type === 'parent' && (
+                          <div style={{marginTop:8,color:'#555'}}>
+                            Contact Number: {profileUser.contact || profileUser.contactNumber || 'N/A'}
+                          </div>
+                        )}
                         {/* Bio placeholder, can be extended */}
                         <div style={{marginTop:12}}><strong>Bio:</strong> {profileUser.bio || 'No bio set.'}</div>
                         {/* Teacher: Show handled sections/subjects */}

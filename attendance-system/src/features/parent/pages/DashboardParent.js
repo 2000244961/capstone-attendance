@@ -1,5 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import InboxIcon from '../../../shared/components/InboxIcon';
+import { useUser } from '../../../shared/UserContext';
 import { useNavigate } from 'react-router-dom';
 import './styles/DashboardParent.css';
 import { fetchInbox, fetchSentMessages, sendExcuseLetter, deleteMessage } from '../../../api/messageApi';
@@ -8,15 +10,43 @@ import { fetchStudents } from '../../../api/studentApi';
 import { fetchAttendance } from '../../../../src/utils/attendanceApi';
 
 function DashboardParent() {
+  // Announcement unread count state
+  const [announcementUnreadCount, setAnnouncementUnreadCount] = useState(0);
+  const announcementUpdateRef = useRef();
+  // Get current parent user from React context
+  const { user: currentUser } = useUser();
+  // Hamburger menu state
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Close sidebar on navigation (mobile)
+  const handleNav = (section) => {
+    setActiveSection(section);
+    setSidebarOpen(false);
+  };
   // State for selected student details
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   // Inbox messages state must be declared before any use
   const [inboxMessages, setInboxMessages] = useState([]);
+  const [sentMessages, setSentMessages] = useState(() => {
+    try {
+      const local = localStorage.getItem('parentSentExcuseLetters');
+      return local ? JSON.parse(local) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [inboxView, setInboxView] = useState('received'); // 'received' or 'sent'
   // Unread inbox count
   const [unreadInboxCount, setUnreadInboxCount] = useState(0);
   useEffect(() => {
     setUnreadInboxCount(Array.isArray(inboxMessages) ? inboxMessages.filter(msg => msg.status === 'unread').length : 0);
   }, [inboxMessages]);
+
+  // Fetch inbox and update unread count immediately on login
+  useEffect(() => {
+    if (currentUser && currentUser._id) {
+      fetchInboxMessages();
+    }
+  }, [currentUser]);
 
   // Mark as read handler
   async function handleMarkAsRead(msgId) {
@@ -36,8 +66,8 @@ function DashboardParent() {
     fetchAllTeachers().then(setTeachers).catch(() => setTeachers([]));
   }, []);
   const [excuseStatus, setExcuseStatus] = useState('');
-  // Get current parent user from localStorage
-  const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+  // Get current parent user from React context
+  // const { user: currentUser } = useUser(); // Removed duplicate declaration
   const userId = currentUser?._id;
   const userRole = currentUser?.type || 'parent';
   let linkedStudentIds = [];
@@ -87,7 +117,26 @@ function DashboardParent() {
       setLinkedStudents([]);
     });
   }, [userId, JSON.stringify(linkedStudentIds)]);
-  // Remove hardcoded teacherId and teacherRole
+  // Track unread announcements from localStorage
+  useEffect(() => {
+    function updateUnreadCount() {
+      let teacherAnnouncements = [];
+      let readAnnouncements = [];
+      try {
+        teacherAnnouncements = JSON.parse(localStorage.getItem('teacherAnnouncements')) || [];
+        readAnnouncements = JSON.parse(localStorage.getItem('parentReadAnnouncements')) || [];
+      } catch {}
+      const unread = Array.isArray(teacherAnnouncements)
+        ? teacherAnnouncements.filter(a => !readAnnouncements.includes(a.id || a.timestamp)).length
+        : 0;
+      setAnnouncementUnreadCount(unread);
+    }
+    updateUnreadCount();
+    // Listen for localStorage changes (from mark as read)
+    window.addEventListener('storage', updateUnreadCount);
+    announcementUpdateRef.current = updateUnreadCount;
+    return () => window.removeEventListener('storage', updateUnreadCount);
+  }, []);
 
   // Delete a message from inbox
   const handleDeleteMessage = async (id) => {
@@ -128,8 +177,8 @@ function DashboardParent() {
     }
     // Debug: log teacherId and form
     console.log('[PARENT] Submitting excuse letter to teacherId:', excuseForm.teacher, 'form:', excuseForm);
-    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
-    console.log('[PARENT] Current user:', currentUser);
+  // currentUser is already available from context/global
+  console.log('[PARENT] Current user:', currentUser);
     // Also log all teachers for dropdown
     console.log('[PARENT] Teachers list:', teachers);
     try {
@@ -146,12 +195,34 @@ function DashboardParent() {
       if (excuseForm.file) {
         formData.append('file', excuseForm.file);
       }
-      await sendExcuseLetter(formData, true); // pass true to indicate FormData
+      const result = await sendExcuseLetter(formData, true); // pass true to indicate FormData
+      // Create a new letter object for instant UI feedback
+      const newLetter = {
+        _id: result?._id || Math.random().toString(36).slice(2),
+        reason: excuseForm.reason,
+        recipient: excuseForm.teacher,
+        sender: userId,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        approverName: '',
+        type: 'excuse_letter',
+        fileName: excuseForm.file?.name || '',
+        excuseDate: excuseForm.date,
+      };
+      setSentMessages(prev => {
+        const updated = [newLetter, ...prev];
+        try {
+          localStorage.setItem('parentSentExcuseLetters', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
       setExcuseStatus('Submitted!');
       setExcuseForm({ reason: '', file: null, date: '', teacher: '' });
-      // Refresh sent excuse letters
-      fetchSent();
-      setTimeout(() => setExcuseStatus(''), 2000);
+      // Refresh sent excuse letters after a short delay
+      setTimeout(() => {
+        fetchSentMessagesOnly();
+        setExcuseStatus('');
+      }, 2000);
     } catch (err) {
       setExcuseStatus('Failed to submit: ' + err.message);
     }
@@ -161,158 +232,400 @@ function DashboardParent() {
   const fetchInboxMessages = async () => {
     try {
       const data = await fetchInbox(userId, userRole);
-      setInboxMessages(data);
+      setInboxMessages(Array.isArray(data) ? data : []);
     } catch (err) {
       setInboxMessages([]);
     }
   };
-  const fetchSent = async () => {
+  const fetchSentMessagesOnly = async () => {
     try {
       const data = await fetchSentMessages(userId);
-      setExcuseLetters(data.filter(msg => msg.type === 'excuse'));
+      // Merge backend and local sentMessages, deduplicating by _id
+      setSentMessages(prev => {
+        const backendLetters = Array.isArray(data) ? data.filter(msg => msg.type === 'excuse_letter') : [];
+        // Merge backend and local, deduplicate by _id
+        const local = (() => { try { return JSON.parse(localStorage.getItem('parentSentExcuseLetters')) || []; } catch { return []; } })();
+        const allLetters = [...local, ...backendLetters];
+        const map = new Map();
+        allLetters.forEach(l => map.set(l._id, l));
+        const merged = Array.from(map.values());
+        // Update localStorage with merged
+        try { localStorage.setItem('parentSentExcuseLetters', JSON.stringify(merged)); } catch {}
+        return merged;
+      });
     } catch (err) {
-      setExcuseLetters([]);
+      setSentMessages(prev => [...prev]); // keep local if backend fails
     }
   };
-
   useEffect(() => {
-    if (activeSection === 'inbox') fetchInboxMessages();
-    if (activeSection === 'excuse') fetchSent();
+    if (activeSection === 'inbox') {
+      fetchInboxMessages();
+      fetchSentMessagesOnly();
+    }
+    if (activeSection === 'excuse') fetchSentMessagesOnly();
     // eslint-disable-next-line
   }, [activeSection]);
 
+  // Define the primary color
+  const primaryColor = '#010662';
+  const gradientMain = `linear-gradient(90deg, ${primaryColor} 0%, #38b2ac 100%)`;
+  const gradientAlt = `linear-gradient(135deg, #e6fffa 0%, #f7fafc 100%)`;
+  const gradientCard = `linear-gradient(135deg, ${primaryColor} 0%, #38b2ac 100%)`;
+  const gradientWarn = `linear-gradient(135deg, #f6ad55 0%, #ff4757 100%)`;
+  const gradientInfo = `linear-gradient(135deg, #38b2ac 0%, ${primaryColor} 100%)`;
+  // Remove duplicate handleNav declaration (already defined above for hamburger logic)
+  // Header gradient and style
+  const parentName = currentUser?.fullName || currentUser?.name || currentUser?.username || 'Parent';
+  // ...existing code...
+  const { setUser } = useUser();
+  const handleLogout = () => {
+    setUser(null); // Clear user context and localStorage
+    navigate('/');
+  };
   return (
-    <div className="admin-dashboard-container">
-      {/* Sidebar */}
-      <aside className="admin-sidebar">
-        <h2 className="admin-logo">SPCC Parent Portal</h2>
+    <div className="admin-dashboard-container" style={{ position: 'relative', minHeight: '100vh', overflowX: 'hidden' }}>
+      {/* Hamburger menu button - above header */}
+      <button
+        className="hamburger-menu-btn"
+        style={{
+          position: 'fixed',
+          top: 16,
+          left: 18,
+          zIndex: 4000, // higher than header
+          background: '#010662',
+          border: 'none',
+          borderRadius: 8,
+          width: 44,
+          height: 44,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 2px 8px #01066222',
+          cursor: 'pointer',
+          color: '#fff',
+          fontSize: 28,
+          transition: 'background 0.2s',
+        }}
+        aria-label="Open sidebar menu"
+        onClick={() => setSidebarOpen(true)}
+      >
+        <span style={{ display: 'block', width: 28, height: 28 }}>
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect y="5" width="28" height="3.5" rx="1.5" fill="#fff"/>
+            <rect y="12" width="28" height="3.5" rx="1.5" fill="#fff"/>
+            <rect y="19" width="28" height="3.5" rx="1.5" fill="#fff"/>
+          </svg>
+        </span>
+      </button>
+      {/* Header - fixed at top, full width */}
+      <header
+        style={{
+          background: 'linear-gradient(90deg, #010662 0%, #38b2ac 100%)',
+          color: '#fff',
+          padding: '0 36px',
+          borderBottom: '2px solid #010662',
+          boxShadow: '0 2px 8px rgba(1,6,98,0.08)',
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          zIndex: 3000,
+          minHeight: 80, // thicker header
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}
+      >
+        <h1 style={{ margin: '10px 0 10px 60px', color: '#fff', fontWeight: 700, fontSize: '1.35rem', letterSpacing: '0.5px' }}>Parent Dashboard</h1>
+        <div className="admin-user-info" style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 24 }}>
+          <span className="icon" style={{marginRight:6}}>👤</span>
+          <span className="username" style={{ color: '#fff', fontWeight: 600, marginRight: 10 }}>{parentName}</span>
+          {/* Notification icon placeholder, replace with real component if available */}
+          <span style={{position:'relative',fontWeight:600,fontSize:'1.1rem',cursor:'pointer',marginRight:10}} title="Notifications">
+            <span role="img" aria-label="bell">🔔</span>
+          </span>
+          {/* Inbox icon and unread count - clickable */}
+          <InboxIcon unreadCount={unreadInboxCount} onClick={() => setActiveSection('inbox')} />
+          <button className="dashboard-btn" style={{ background: '#fff', color: '#010662', fontWeight: 700, border: 'none', borderRadius: 6, padding: '8px 18px', cursor: 'pointer' }}>View Profile</button>
+          <button className="logout-button" style={{ background: '#ff4757', color: '#fff', fontWeight: 700, border: 'none', borderRadius: 6, padding: '8px 18px', cursor: 'pointer', marginRight: 10 }} onClick={handleLogout}>Logout</button>
+        </div>
+      </header>
+      {/* Hamburger icon for mobile */}
+      <button
+        className="hamburger-menu-btn"
+        style={{
+          position: 'fixed',
+          top: 18,
+          left: 18,
+          zIndex: 2002,
+          background: primaryColor,
+          border: 'none',
+          borderRadius: 8,
+          width: 44,
+          height: 44,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 2px 8px #01066222',
+          cursor: 'pointer',
+          color: '#fff',
+          fontSize: 28,
+          transition: 'background 0.2s',
+        }}
+        aria-label="Open sidebar menu"
+        onClick={() => setSidebarOpen(true)}
+      >
+        <span style={{ display: 'block', width: 28, height: 28 }}>
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect y="5" width="28" height="3.5" rx="1.5" fill="#fff"/>
+            <rect y="12" width="28" height="3.5" rx="1.5" fill="#fff"/>
+            <rect y="19" width="28" height="3.5" rx="1.5" fill="#fff"/>
+          </svg>
+        </span>
+      </button>
+      <aside
+        className="admin-sidebar"
+        style={{
+          background: primaryColor,
+          position: 'fixed',
+          top: 80, // move below header
+          left: sidebarOpen ? 0 : -260,
+          width: 260,
+          height: 'calc(100vh - 80px)', // adjust for header height
+          zIndex: 2001,
+          boxShadow: sidebarOpen ? '0 2px 24px #01066233' : 'none',
+          transition: 'left 0.25s cubic-bezier(.4,1.6,.6,1)',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        {/* Close button for mobile */}
+        <button
+          onClick={() => setSidebarOpen(false)}
+          aria-label="Close sidebar menu"
+          style={{
+            display: 'block',
+            background: 'none',
+            border: 'none',
+            color: '#fff',
+            fontSize: 32,
+            position: 'absolute',
+            top: 18,
+            right: 18,
+            cursor: 'pointer',
+            zIndex: 2003,
+            outline: 'none',
+            visibility: 'visible',
+          }}
+        >×</button>
+        
         <nav className="admin-nav">
-          <ul>
-            <li className={activeSection === 'overview' ? 'active' : ''} onClick={() => setActiveSection('overview')}>Overview</li>
-            <li className={activeSection === 'students' ? 'active' : ''} onClick={() => setActiveSection('students')}>
-              Linked Students
+          <ul style={{ padding: 0, margin: 0, listStyle: 'none', width: '100%' }}>
+            <li className={activeSection === 'overview' ? 'active' : ''} onClick={() => handleNav('overview')} style={{ color: activeSection === 'overview' ? primaryColor : '#fff', background: activeSection === 'overview' ? '#fff' : 'transparent', fontWeight: 700, padding: '14px 24px', borderRadius: 8, margin: '6px 12px', cursor: 'pointer' }}>Overview</li>
+            <li className={activeSection === 'students' ? 'active' : ''} onClick={() => handleNav('students')} style={{ color: activeSection === 'students' ? primaryColor : '#fff', background: activeSection === 'students' ? '#fff' : 'transparent', fontWeight: 700, padding: '14px 24px', borderRadius: 8, margin: '6px 12px', cursor: 'pointer' }}>
+              Enrolled Students
             </li>
-            <li className={activeSection === 'attendance' ? 'active' : ''} onClick={() => setActiveSection('attendance')}>Attendance</li>
-            <li className={activeSection === 'announcements' ? 'active' : ''} onClick={() => setActiveSection('announcements')}>Announcements</li>
-            <li className={activeSection === 'inbox' ? 'active' : ''} onClick={() => setActiveSection('inbox')}>
-              Inbox {unreadInboxCount > 0 && (<span style={{ color: 'red', fontWeight: 'bold', marginLeft: 6 }}>{unreadInboxCount}</span>)}
+            <li className={activeSection === 'attendance' ? 'active' : ''} onClick={() => handleNav('attendance')} style={{ color: activeSection === 'attendance' ? primaryColor : '#fff', background: activeSection === 'attendance' ? '#fff' : 'transparent', fontWeight: 700, padding: '14px 24px', borderRadius: 8, margin: '6px 12px', cursor: 'pointer' }}>Attendance</li>
+            <li className={activeSection === 'announcements' ? 'active' : ''} onClick={() => handleNav('announcements')} style={{ color: activeSection === 'announcements' ? primaryColor : '#fff', background: activeSection === 'announcements' ? '#fff' : 'transparent', fontWeight: 700, padding: '14px 24px', borderRadius: 8, margin: '6px 12px', cursor: 'pointer', position: 'relative' }}>
+              Announcements
+              {announcementUnreadCount > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  right: 18,
+                  top: 12,
+                  background: '#ff4757',
+                  color: '#fff',
+                  borderRadius: 8,
+                  padding: '2px 10px',
+                  fontWeight: 700,
+                  fontSize: '0.98rem',
+                  boxShadow: '0 1px 4px #ff475710',
+                  border: '2px solid #fff',
+                  letterSpacing: 0.5
+                }}>{announcementUnreadCount}</span>
+              )}
             </li>
-            <li className={activeSection === 'excuse' ? 'active' : ''} onClick={() => setActiveSection('excuse')}>Excuse Letter</li>
-            <li onClick={() => navigate('/')}>Logout</li>
+            <li className={activeSection === 'inbox' ? 'active' : ''} onClick={() => handleNav('inbox')} style={{ color: activeSection === 'inbox' ? primaryColor : '#fff', background: activeSection === 'inbox' ? '#fff' : 'transparent', fontWeight: 700, padding: '14px 24px', borderRadius: 8, margin: '6px 12px', cursor: 'pointer' }}>
+              Inbox {unreadInboxCount > 0 && (<span style={{ color: '#ff4757', fontWeight: 'bold', marginLeft: 6 }}>{unreadInboxCount}</span>)}
+            </li>
+            <li className={activeSection === 'excuse' ? 'active' : ''} onClick={() => handleNav('excuse')} style={{ color: activeSection === 'excuse' ? primaryColor : '#fff', background: activeSection === 'excuse' ? '#fff' : 'transparent', fontWeight: 700, padding: '14px 24px', borderRadius: 8, margin: '6px 12px', cursor: 'pointer' }}>Excuse Letter</li>
+            <li onClick={() => navigate('/')} style={{ color: '#fff', fontWeight: 700, padding: '14px 24px', borderRadius: 8, margin: '6px 12px', cursor: 'pointer' }}>Logout</li>
           </ul>
         </nav>
       </aside>
-      {/* Main content */}
-      <main className="admin-main-content">
+      {/* Overlay for mobile sidebar */}
+      {sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            background: '#01066255',
+            zIndex: 2000,
+            animation: 'fadeInOverlay 0.2s',
+          }}
+        />
+      )}
+      {/* Main content, shifts right on mobile when sidebar is open */}
+      <main
+        className="admin-main-content"
+        style={{
+          marginLeft: sidebarOpen ? 260 : 0,
+          marginTop: 80, // match thicker header
+          transition: 'margin-left 0.25s cubic-bezier(.4,1.6,.6,1), transform 0.25s cubic-bezier(.4,1.6,.6,1)',
+          transform: sidebarOpen ? 'translateX(260px)' : 'translateX(0)',
+        }}
+      >
         {activeSection === 'inbox' && (
           <div style={{ maxWidth: '1000px', minWidth: 'min(100vw, 600px)', margin: '0 auto', padding: '32px 0 32px 0' }}>
-            <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 28, color: '#2d3748' }}>
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 28, color: primaryColor }}>
               <span role="img" aria-label="inbox">📥</span> Inbox
             </h2>
-            {/* Parent Send Message Form */}
-            <div style={{ background: '#fff', borderRadius: 10, padding: '18px 24px', boxShadow: '0 2px 8px rgba(33,150,243,0.07)', marginBottom: 24 }}>
-              <h3 style={{ marginBottom: 12 }}>Send Message</h3>
-              <form /* onSubmit={handleSendParentMessage} */ style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <label style={{ fontWeight: 500 }}>Recipient Type:</label>
-                  <select /* value={recipientType} onChange={e => { setRecipientType(e.target.value); setRecipientUserId(''); }} */ style={{ padding: '6px 12px', borderRadius: 6 }} required>
-                    <option value="">Select type</option>
-                    <option value="all">All Teachers & Admins</option>
-                    <option value="teacher">All Teachers</option>
-                    <option value="admin">All Admins</option>
-                    <option value="specific">Specific User</option>
-                  </select>
-                </div>
-                {/* Recipient user search and selection for 'specific' */}
-                {/* ...implement user search and selection as in teacher inbox... */}
-                <textarea
-                  /* value={messageContent} onChange={e => setMessageContent(e.target.value)} */
-                  placeholder="Type your message here..."
-                  rows={3}
-                  style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #ccc', resize: 'vertical' }}
-                  required
-                />
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <button type="submit" className="dashboard-btn primary" /* disabled={messageSending} */>
-                    {/* {messageSending ? 'Sending...' : 'Send'} */}Send
-                  </button>
-                  {/* {messageError && <span style={{ color: '#e53e3e' }}>{messageError}</span>} */}
-                  {/* {messageSuccess && <span style={{ color: '#38a169' }}>{messageSuccess}</span>} */}
-                </div>
-              </form>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 18 }}>
+              <button
+                className="dashboard-btn"
+                style={{ background: inboxView === 'received' ? primaryColor : '#fff', color: inboxView === 'received' ? '#fff' : primaryColor, fontWeight: 700, border: `2px solid ${primaryColor}` }}
+                onClick={() => setInboxView('received')}
+              >Received</button>
+              <button
+                className="dashboard-btn"
+                style={{ background: inboxView === 'sent' ? primaryColor : '#fff', color: inboxView === 'sent' ? '#fff' : primaryColor, fontWeight: 700, border: `2px solid ${primaryColor}` }}
+                onClick={() => setInboxView('sent')}
+              >Sent</button>
             </div>
-            <button onClick={fetchInboxMessages} style={{ margin: '16px 0', padding: '8px 18px', background: '#3182ce', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}>Refresh Inbox</button>
-            <div style={{ background: '#f7fafc', borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.07)', padding: '32px 48px', marginTop: 24, minHeight: 500, maxHeight: '70vh', overflowY: 'auto', width: '100%', boxSizing: 'border-box' }}>
-              {inboxMessages.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#888' }}>No messages in your inbox.</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                  {inboxMessages.map(msg => {
-                    // Determine if sent or received (sent if sender is current parent)
-                    const isSent = msg.senderId === userId;
-                    const senderName = isSent ? (currentUser?.fullName || currentUser?.name || currentUser?.username || 'You') : (msg.senderName || 'Unknown');
-                    const avatar = isSent
-                      ? (currentUser?.photo || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser?.fullName || currentUser?.name || currentUser?.username || 'Parent'))
-                      : ('https://ui-avatars.com/api/?name=' + encodeURIComponent(senderName));
-                    return (
-                      <div key={msg._id} style={{
-                        display: 'flex',
-                        flexDirection: isSent ? 'row-reverse' : 'row',
-                        alignItems: 'flex-end',
-                        gap: 12,
-                        justifyContent: isSent ? 'flex-end' : 'flex-start',
-                      }}>
-                        <img src={avatar} alt="avatar" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', background: '#e3f2fd', border: '2px solid #fff', boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }} />
-                        <div style={{
-                          background: isSent ? '#3182ce' : '#fff',
-                          color: isSent ? '#fff' : '#333',
-                          borderRadius: isSent ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                          padding: '14px 18px',
-                          minWidth: 80,
-                          maxWidth: 340,
-                          boxShadow: '0 2px 8px rgba(33,150,243,0.07)',
-                          marginBottom: 2,
-                          textAlign: 'left',
-                          position: 'relative',
+            <button onClick={fetchInboxMessages} style={{ margin: '16px 0', padding: '8px 18px', background: primaryColor, color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}>Refresh Inbox</button>
+            <div style={{ background: '#f7fafc', borderRadius: 12, boxShadow: `0 2px 12px ${primaryColor}22`, padding: '32px 48px', marginTop: 24, minHeight: 500, maxHeight: '70vh', overflowY: 'auto', width: '100%', boxSizing: 'border-box' }}>
+              {inboxView === 'received' ? (
+                inboxMessages.length === 0 ? (
+                  <div style={{ textAlign: 'center', color: '#888' }}>No messages in your inbox.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                    {inboxMessages.map(msg => {
+                      // Determine if sent or received (sent if sender is current parent)
+                      const isSent = msg.senderId === userId;
+                      let senderName = 'Unknown';
+                      if (isSent) {
+                        senderName = currentUser?.fullName || currentUser?.name || currentUser?.username || 'You';
+                      } else if (msg.sender?.role === 'teacher' && msg.sender?.id) {
+                        const t = teachers.find(u => u._id === msg.sender.id);
+                        senderName = t ? (t.fullName || t.username || t.email || msg.sender.id) : msg.sender.id;
+                      } else if (msg.sender?.role === 'admin') {
+                        senderName = 'Admin';
+                      } else if (msg.sender?.role === 'parent' && msg.sender?.id) {
+                        senderName = 'Parent';
+                      } else if (msg.senderName) {
+                        senderName = msg.senderName;
+                      }
+                      const avatar = isSent
+                        ? (currentUser?.photo || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser?.fullName || currentUser?.name || currentUser?.username || 'Parent'))
+                        : ('https://ui-avatars.com/api/?name=' + encodeURIComponent(senderName));
+                      return (
+                        <div key={msg._id} style={{
+                          display: 'flex',
+                          flexDirection: isSent ? 'row-reverse' : 'row',
+                          alignItems: 'flex-end',
+                          gap: 12,
+                          justifyContent: isSent ? 'flex-end' : 'flex-start',
                         }}>
-                          <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 15 }}>
-                            {isSent ? 'You' : senderName}
-                            {msg.type === 'excuse_letter' && <span style={{ marginLeft: 8, color: '#38b2ac' }}>Excuse Letter</span>}
-                          </div>
-                          <div style={{ fontSize: '1.05rem', marginBottom: 6, wordBreak: 'break-word' }}>{msg.content}</div>
-                          {msg.type === 'excuse_letter' && msg.fileUrl && (
-                            <div style={{ margin: '8px 0' }}>
-                              <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer" download style={{ color: isSent ? '#fff' : '#3182ce', fontWeight: 600, textDecoration: 'underline' }}>
-                                View Excuse Letter File
-                              </a>
+                          <img src={avatar} alt="avatar" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', background: '#e3f2fd', border: '2px solid #fff', boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }} />
+                          <div style={{
+                            background: isSent ? primaryColor : '#fff',
+                            color: isSent ? '#fff' : '#333',
+                            borderRadius: isSent ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                            padding: '14px 18px',
+                            minWidth: 80,
+                            maxWidth: 340,
+                            boxShadow: '0 2px 8px rgba(33,150,243,0.07)',
+                            marginBottom: 2,
+                            textAlign: 'left',
+                            position: 'relative',
+                          }}>
+                            <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 15 }}>
+                              {isSent ? 'You' : senderName}
+                              {msg.type === 'excuse_letter' && <span style={{ marginLeft: 8, color: '#38b2ac' }}>Excuse Letter</span>}
                             </div>
-                          )}
-                          <div style={{ fontSize: '0.92rem', color: isSent ? '#e0e8f7' : '#888', marginTop: 8 }}>
-                            {new Date(msg.createdAt).toLocaleString()}
-                          </div>
-                          <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-                            {msg.status === 'unread' && !isSent && (
-                              <button onClick={() => handleMarkAsRead(msg._id)} style={{ background: '#3182ce', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontWeight: 600, cursor: 'pointer' }}>Mark as Read</button>
+                            <div style={{ fontSize: '1.05rem', marginBottom: 6, wordBreak: 'break-word' }}>{msg.content}</div>
+                            {/* Show approver name if excuse letter is approved */}
+                            {msg.type === 'excuse_letter' && msg.approverName && (
+                              <div style={{ margin: '6px 0', color: '#38b2ac', fontWeight: 700 }}>
+                                Approved by: {msg.approverName}
+                              </div>
                             )}
-                            <button onClick={() => handleDeleteMessage(msg._id)} style={{ background: '#fff', color: '#e53e3e', border: '1px solid #e53e3e', borderRadius: 6, padding: '4px 12px', fontWeight: 600, cursor: 'pointer' }}>Delete</button>
+                            {msg.type === 'excuse_letter' && msg.fileUrl && (
+                              <div style={{ margin: '8px 0' }}>
+                                <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer" download style={{ color: isSent ? '#fff' : primaryColor, fontWeight: 600, textDecoration: 'underline' }}>
+                                  View Excuse Letter File
+                                </a>
+                              </div>
+                            )}
+                            <div style={{ fontSize: '0.92rem', color: isSent ? '#e0e8f7' : '#888', marginTop: 8 }}>
+                              {new Date(msg.createdAt).toLocaleString()}
+                            </div>
+                            <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                              {msg.status === 'unread' && !isSent && (
+                                <button onClick={() => handleMarkAsRead(msg._id)} style={{ background: primaryColor, color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontWeight: 600, cursor: 'pointer' }}>Mark as Read</button>
+                              )}
+                              <button onClick={() => handleDeleteMessage(msg._id)} style={{ background: '#fff', color: '#e53e3e', border: '1px solid #e53e3e', borderRadius: 6, padding: '4px 12px', fontWeight: 600, cursor: 'pointer' }}>Delete</button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )
+              ) : (
+                sentMessages.length === 0 ? (
+                  <div style={{ textAlign: 'center', color: '#888' }}>No sent excuse letters.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                    {sentMessages.map(msg => {
+                      // Show teacher name for sent excuse letter
+                      const teacherName = teachers.find(t => t._id === (msg.recipient?.id || msg.recipient))?.fullName || 'Unknown';
+                      return (
+                        <div key={msg._id} style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-end', gap: 12, justifyContent: 'flex-start' }}>
+                          <img src={'https://ui-avatars.com/api/?name=' + encodeURIComponent(teacherName)} alt="avatar" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', background: '#e3f2fd', border: `2px solid ${primaryColor}`, boxShadow: `0 1px 4px ${primaryColor}22` }} />
+                          <div style={{ background: '#fff', color: '#333', borderRadius: '18px 18px 18px 4px', padding: '14px 18px', minWidth: 80, maxWidth: 340, boxShadow: `0 2px 8px ${primaryColor}22`, marginBottom: 2, textAlign: 'left', position: 'relative' }}>
+                            <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 15 }}>
+                              Excuse Letter to {teacherName}
+                            </div>
+                            <div style={{ fontSize: '1.05rem', marginBottom: 6, wordBreak: 'break-word' }}>{msg.content}</div>
+                            {/* Show approver name if excuse letter is approved */}
+                            {msg.status === 'approved' && (
+                              <div style={{ margin: '6px 0', color: '#38b2ac', fontWeight: 700 }}>
+                                Approved by: {msg.approverName || teacherName}
+                              </div>
+                            )}
+                            {msg.fileUrl && (
+                              <div style={{ margin: '8px 0' }}>
+                                <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer" download style={{ color: primaryColor, fontWeight: 600, textDecoration: 'underline' }}>
+                                  View Excuse Letter File
+                                </a>
+                              </div>
+                            )}
+                            <div style={{ fontSize: '0.92rem', color: '#888', marginTop: 8 }}>
+                              {new Date(msg.createdAt).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
               )}
             </div>
           </div>
         )}
         {activeSection === 'excuse' && (
           <div style={{ padding: '32px', maxWidth: 800, margin: '0 auto' }}>
-            <h2 style={{ marginBottom: 8, fontWeight: 900, fontSize:'2rem', background: 'linear-gradient(90deg, #2196F3 0%, #38b2ac 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: 1, textAlign:'center' }}>
+            <h2 style={{ marginBottom: 8, fontWeight: 900, fontSize:'2rem', background: gradientMain, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: 1, textAlign:'center' }}>
               <span style={{marginRight:8, fontSize:'2.2rem'}}>📄</span>Excuse Letter Submission
             </h2>
-            <form onSubmit={handleExcuseFormSubmit} style={{background:'linear-gradient(135deg, #e6fffa 0%, #f7fafc 100%)',borderRadius:18,padding:'32px 40px',boxShadow:'0 6px 32px rgba(33,150,243,0.13)',display:'flex',flexDirection:'column',gap:20,maxWidth:540,margin:'0 auto',border:'2px solid #38b2ac'}}>
-              <div style={{fontWeight:700,fontSize:'1.15rem',marginBottom:4,color:'#2196F3'}}>Select Teacher:</div>
-              <select name="teacher" value={excuseForm.teacher} onChange={handleExcuseFormChange} required style={{marginBottom:8,background:'#e6fffa',borderRadius:8,padding:'10px 0',border:'1px solid #38b2ac',fontSize:'1.05rem'}}>
+            <form onSubmit={handleExcuseFormSubmit} style={{background: gradientAlt, borderRadius:18, padding:'32px 40px', boxShadow:`0 6px 32px ${primaryColor}22`, display:'flex', flexDirection:'column', gap:20, maxWidth:540, margin:'0 auto', border:`2px solid ${primaryColor}`}}>
+              <div style={{fontWeight:700,fontSize:'1.15rem',marginBottom:4,color:primaryColor}}>Select Teacher:</div>
+              <select name="teacher" value={excuseForm.teacher} onChange={handleExcuseFormChange} required style={{marginBottom:8,background:'#e6fffa',borderRadius:8,padding:'10px 0',border:`1px solid ${primaryColor}`,fontSize:'1.05rem', color: primaryColor}}>
                 <option value="">-- Select a Teacher --</option>
                 {teachers.map(t => (
                   <option key={t._id} value={t._id}>{t.fullName || t.name || t.username}</option>
@@ -321,51 +634,55 @@ function DashboardParent() {
               {teachers.length === 0 && (
                 <div style={{color:'red',marginTop:8}}>No teachers found. Please contact the administrator.</div>
               )}
-              <div style={{fontWeight:700,fontSize:'1.15rem',marginBottom:4,color:'#2196F3'}}>Reason for Absence:</div>
-              <textarea name="reason" value={excuseForm.reason} onChange={handleExcuseFormChange} required style={{minHeight:70,padding:14,borderRadius:10,border:'1.5px solid #38b2ac',fontSize:'1.05rem',background:'#fff',boxShadow:'0 2px 8px rgba(33,150,243,0.07)'}} placeholder="Describe the reason for absence..." />
-              <div style={{fontWeight:700,fontSize:'1.15rem',marginBottom:4,color:'#2196F3'}}>Date of Absence:</div>
-              <input type="date" name="date" value={excuseForm.date} onChange={handleExcuseFormChange} required style={{marginBottom:8,background:'#e6fffa',borderRadius:8,padding:'8px 0',border:'1px solid #38b2ac'}} />
-              <div style={{fontWeight:700,fontSize:'1.15rem',marginBottom:4,color:'#2196F3'}}>Upload Supporting Document:</div>
-              <input type="file" name="file" accept="image/*,.pdf,.doc,.docx" onChange={handleExcuseFormChange} style={{marginBottom:8,background:'#e6fffa',borderRadius:8,padding:'8px 0',border:'1px solid #38b2ac'}} />
-              <button type="submit" style={{marginTop:8,background:'linear-gradient(90deg, #2196F3 0%, #38b2ac 100%)',color:'#fff',borderRadius:10,padding:'12px 0',fontWeight:900,border:'none',fontSize:'1.15rem',cursor:'pointer',boxShadow:'0 2px 8px rgba(33,150,243,0.13)',letterSpacing:1,transition:'transform 0.1s'}}
+              <div style={{fontWeight:700,fontSize:'1.15rem',marginBottom:4,color:primaryColor}}>Reason for Absence:</div>
+              <textarea name="reason" value={excuseForm.reason} onChange={handleExcuseFormChange} required style={{minHeight:70,padding:14,borderRadius:10,border:`1.5px solid ${primaryColor}`,fontSize:'1.05rem',background:'#fff',boxShadow:`0 2px 8px ${primaryColor}22`, color: primaryColor}} placeholder="Describe the reason for absence..." />
+              <div style={{fontWeight:700,fontSize:'1.15rem',marginBottom:4,color:primaryColor}}>Date of Absence:</div>
+              <input type="date" name="date" value={excuseForm.date} onChange={handleExcuseFormChange} required style={{marginBottom:8,background:'#e6fffa',borderRadius:8,padding:'8px 0',border:`1px solid ${primaryColor}`, color: primaryColor}} />
+              <div style={{fontWeight:700,fontSize:'1.15rem',marginBottom:4,color:primaryColor}}>Upload Supporting Document:</div>
+              <input type="file" name="file" accept="image/*,.pdf,.doc,.docx" onChange={handleExcuseFormChange} style={{marginBottom:8,background:'#e6fffa',borderRadius:8,padding:'8px 0',border:`1px solid ${primaryColor}`, color: primaryColor}} />
+              <button type="submit" style={{marginTop:8,background: gradientMain, color:'#fff',borderRadius:10,padding:'12px 0',fontWeight:900,border:'none',fontSize:'1.15rem',cursor:'pointer',boxShadow:`0 2px 8px ${primaryColor}22`,letterSpacing:1,transition:'transform 0.1s'}}
                 onMouseDown={e => e.currentTarget.style.transform = 'scale(0.97)'}
                 onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
               >
                 <span style={{marginRight:8,fontSize:'1.2rem'}}>📨</span>Submit Excuse Letter
               </button>
-              {excuseStatus && <div style={{marginTop:8,color:'#38b2ac',fontWeight:700,fontSize:'1.08rem',textAlign:'center',animation:'fadeIn 1s'}}>{excuseStatus}</div>}
+              {excuseStatus && <div style={{marginTop:8,color:primaryColor,fontWeight:700,fontSize:'1.08rem',textAlign:'center',animation:'fadeIn 1s'}}>{excuseStatus}</div>}
             </form>
             <div style={{marginTop:40}}>
-              <h3 style={{fontWeight:900,color:'#2196F3',marginBottom:20,fontSize:'1.3rem',textAlign:'center',letterSpacing:1}}><span style={{marginRight:8,fontSize:'1.3rem'}}>�</span>Submitted Excuse Letters</h3>
-              {excuseLetters.length === 0 ? (
+              <h3 style={{fontWeight:900,color:primaryColor,marginBottom:20,fontSize:'1.3rem',textAlign:'center',letterSpacing:1}}><span style={{marginRight:8,fontSize:'1.3rem'}}>�</span>Submitted Excuse Letters</h3>
+              {sentMessages.length === 0 ? (
                 <div style={{background:'linear-gradient(90deg, #fffbea 0%, #e6fffa 100%)',padding:'22px',borderRadius:12,color:'#f6ad55',fontWeight:700,boxShadow:'0 2px 8px rgba(246,173,85,0.10)',textAlign:'center',fontSize:'1.08rem'}}>No excuse letters submitted yet.</div>
               ) : (
                 <div style={{display:'flex',flexWrap:'wrap',gap:24,justifyContent:'center'}}>
-                  {excuseLetters.map(letter => (
-                    <div key={letter.id} style={{background:'linear-gradient(135deg, #2196F3 0%, #38b2ac 100%)',borderRadius:16,boxShadow:'0 6px 32px rgba(33,150,243,0.13)',padding:'24px 28px',minWidth:260,maxWidth:340,display:'flex',flexDirection:'column',gap:12,position:'relative',color:'#fff',border:'2px solid #fff'}}>
-                      <div style={{position:'absolute',top:18,right:18,fontSize:'2rem',opacity:0.13}}>📄</div>
-                      <div style={{fontWeight:900,fontSize:'1.15rem',marginBottom:4,letterSpacing:1}}><span style={{marginRight:8}}>📝</span>{letter.reason}</div>
-                      {letter.approverName && (
-                        <div style={{color:'#fffbea',fontWeight:700,marginBottom:4}}>Approved by: {letter.approverName}</div>
-                      )}
-                      <div style={{fontSize:'1.05rem',color:'#e6fffa'}}>
-                        <span style={{fontWeight:700}}>File:</span> {letter.fileName ? (
-                          <span style={{color:'#fff',background:'rgba(56,178,172,0.18)',borderRadius:6,padding:'2px 8px',marginLeft:4}}><span style={{marginRight:4}}>📎</span>{letter.fileName}</span>
-                        ) : 'N/A'}
-                      </div>
-                      <div style={{fontWeight:900,fontSize:'1.05rem',marginTop:6}}>
-                        Status: {letter.status === 'Pending' ? (
-                          <span style={{color:'#fffbea',background:'rgba(246,173,85,0.18)',borderRadius:6,padding:'2px 12px',fontWeight:700,animation:'pulse 1.2s infinite'}}>
-                            <span style={{marginRight:4}}>⏳</span>Pending
-                          </span>
-                        ) : (
-                          <span style={{color:'#e6fffa',background:'rgba(56,178,172,0.18)',borderRadius:6,padding:'2px 12px',fontWeight:700}}>
-                            <span style={{marginRight:4}}>✔️</span>{letter.status}
-                          </span>
+                  {sentMessages.map(letter => {
+                    const teacherName = teachers.find(t => t._id === (letter.recipient?.id || letter.recipient))?.fullName || 'Unknown';
+                    return (
+                      <div key={letter._id} style={{background: gradientCard, borderRadius:16, boxShadow:`0 6px 32px ${primaryColor}22`, padding:'24px 28px', minWidth:260, maxWidth:340, display:'flex', flexDirection:'column', gap:12, position:'relative', color:'#fff', border:`2px solid #fff`}}>
+                        <div style={{position:'absolute',top:18,right:18,fontSize:'2rem',opacity:0.13}}>📄</div>
+                        <div style={{fontWeight:900,fontSize:'1.15rem',marginBottom:4,letterSpacing:1}}><span style={{marginRight:8}}>📝</span>{letter.reason}</div>
+                        {/* Show approver name if excuse letter is approved */}
+                        {letter.status === 'approved' && (
+                          <div style={{color:'#fffbea',fontWeight:700,marginBottom:4}}>Approved by: {letter.approverName || teacherName}</div>
                         )}
+                        <div style={{fontSize:'1.05rem',color:'#e6fffa'}}>
+                          <span style={{fontWeight:700}}>File:</span> {letter.fileName ? (
+                            <span style={{color:'#fff',background:'rgba(56,178,172,0.18)',borderRadius:6,padding:'2px 8px',marginLeft:4}}><span style={{marginRight:4}}>📎</span>{letter.fileName}</span>
+                          ) : 'N/A'}
+                        </div>
+                        <div style={{fontWeight:900,fontSize:'1.05rem',marginTop:6}}>
+                          Status: {letter.status === 'Pending' ? (
+                            <span style={{color:'#fffbea',background:'rgba(246,173,85,0.18)',borderRadius:6,padding:'2px 12px',fontWeight:700,animation:'pulse 1.2s infinite'}}>
+                              <span style={{marginRight:4}}>⏳</span>Pending
+                            </span>
+                          ) : (
+                            <span style={{color:'#e6fffa',background:'rgba(56,178,172,0.18)',borderRadius:6,padding:'2px 12px',fontWeight:700}}>
+                              <span style={{marginRight:4}}>✔️</span>{letter.status}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -385,40 +702,40 @@ function DashboardParent() {
         )}
         {activeSection === 'overview' && (
           <div style={{ padding: '32px', maxWidth: 900, margin: '0 auto' }}>
-            <h2 style={{ marginBottom: 8, fontWeight: 800, color: '#2196F3', letterSpacing: 1 }}>Dashboard Overview</h2>
+            <h2 style={{ marginBottom: 8, fontWeight: 800, color: primaryColor, letterSpacing: 1 }}>Dashboard Overview</h2>
             <p style={{ marginBottom: 24, fontSize: '1.1rem', color: '#2d3e50', fontWeight: 500 }}>Welcome, Parent! Here is a quick summary of your account.</p>
             <div style={{ display: 'flex', gap: 24, marginBottom: 32, flexWrap: 'wrap' }}>
-              <div style={{ flex: '1 1 220px', background: 'linear-gradient(135deg, #38b2ac 0%, #2196F3 100%)', borderRadius: 14, padding: '24px 32px', boxShadow: '0 4px 24px rgba(33,150,243,0.10)', textAlign: 'center', color: '#fff', minWidth: 180, position: 'relative' }}>
+              <div style={{ flex: '1 1 220px', background: gradientInfo, borderRadius: 14, padding: '24px 32px', boxShadow: `0 4px 24px ${primaryColor}22`, textAlign: 'center', color: '#fff', minWidth: 180, position: 'relative' }}>
                 <span style={{ position: 'absolute', top: 18, right: 18, fontSize: 28, opacity: 0.15 }}>👨‍👧‍👦</span>
                 <div style={{ fontSize: '2.2rem', fontWeight: 800, marginBottom: 8 }}>{linkedStudents.length}</div>
                 <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>Linked Students</div>
               </div>
-              <div style={{ flex: '1 1 220px', background: 'linear-gradient(135deg, #2196F3 0%, #38b2ac 100%)', borderRadius: 14, padding: '24px 32px', boxShadow: '0 4px 24px rgba(33,150,243,0.10)', textAlign: 'center', color: '#fff', minWidth: 180, position: 'relative' }}>
+              <div style={{ flex: '1 1 220px', background: gradientCard, borderRadius: 14, padding: '24px 32px', boxShadow: `0 4px 24px ${primaryColor}22`, textAlign: 'center', color: '#fff', minWidth: 180, position: 'relative' }}>
                 <span style={{ position: 'absolute', top: 18, right: 18, fontSize: 28, opacity: 0.15 }}>📋</span>
                 <div style={{ fontSize: '2.2rem', fontWeight: 800, marginBottom: 8 }}>{attendanceRecords.length}</div>
                 <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>Attendance Records</div>
               </div>
-              <div style={{ flex: '1 1 220px', background: 'linear-gradient(135deg, #f6ad55 0%, #ff4757 100%)', borderRadius: 14, padding: '24px 32px', boxShadow: '0 4px 24px rgba(255,71,87,0.10)', textAlign: 'center', color: '#fff', minWidth: 180, position: 'relative' }}>
+              <div style={{ flex: '1 1 220px', background: gradientWarn, borderRadius: 14, padding: '24px 32px', boxShadow: `0 4px 24px #ff475722`, textAlign: 'center', color: '#fff', minWidth: 180, position: 'relative' }}>
                 <span style={{ position: 'absolute', top: 18, right: 18, fontSize: 28, opacity: 0.15 }}>📢</span>
                 <div style={{ fontSize: '2.2rem', fontWeight: 800, marginBottom: 8 }}>{inboxMessages.filter(m => m.status === 'unread').length}</div>
                 <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>Unread Announcements</div>
               </div>
             </div>
-            <div style={{ marginBottom: 32, background: '#f7fafc', borderRadius: 12, padding: '24px 32px', boxShadow: '0 2px 8px rgba(33,150,243,0.07)' }}>
-              <h3 style={{ marginBottom: 16, fontWeight: 700, color: '#2196F3' }}>Recently Linked Students</h3>
+            <div style={{ marginBottom: 32, background: '#f7fafc', borderRadius: 12, padding: '24px 32px', boxShadow: `0 2px 8px ${primaryColor}22` }}>
+              <h3 style={{ marginBottom: 16, fontWeight: 700, color: primaryColor }}>Recently Linked Students</h3>
               <ul style={{ listStyle: 'none', padding: 0, display: 'flex', gap: 18, flexWrap: 'wrap' }}>
                 {linkedStudents.length === 0 ? (
                   <li style={{ color: '#888', fontWeight: 500 }}>No linked students found.</li>
                 ) : (
                   linkedStudents.map(s => (
-                    <li key={s._id || s.studentId} style={{ background: '#e6fffa', borderRadius: 8, padding: '14px 24px', fontWeight: 600, color: '#38b2ac', minWidth: 160, boxShadow: '0 2px 8px rgba(56,178,172,0.10)' }}>
-                      {s.fullName || s.name} <span style={{ color: '#2196F3', fontWeight: 500 }}>({s.section || s.sectionName || '-'})</span>
+                    <li key={s._id || s.studentId} style={{ background: '#e6fffa', borderRadius: 8, padding: '14px 24px', fontWeight: 600, color: primaryColor, minWidth: 160, boxShadow: `0 2px 8px ${primaryColor}10` }}>
+                      {s.fullName || s.name} <span style={{ color: primaryColor, fontWeight: 500 }}>({s.section || s.sectionName || '-'})</span>
                     </li>
                   ))
                 )}
               </ul>
             </div>
-            <div style={{ marginBottom: 32, background: '#fffbea', borderRadius: 12, padding: '24px 32px', boxShadow: '0 2px 8px rgba(246,173,85,0.10)' }}>
+            <div style={{ marginBottom: 32, background: '#fffbea', borderRadius: 12, padding: '24px 32px', boxShadow: '0 2px 8px #f6ad5510' }}>
               <h3 style={{ marginBottom: 16, fontWeight: 700, color: '#f6ad55' }}>Today's Attendance Summary</h3>
               <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
                 <div style={{ background: '#e6fffa', borderRadius: 8, padding: '16px 32px', textAlign: 'center', minWidth: 120 }}>
@@ -435,7 +752,7 @@ function DashboardParent() {
                 </div>
               </div>
             </div>
-            <div style={{ background: 'linear-gradient(90deg, #2196F3 0%, #38b2ac 100%)', borderRadius: 10, padding: '20px 32px', color: '#fff', fontWeight: 600, fontSize: '1.1rem', boxShadow: '0 2px 8px rgba(33,150,243,0.10)', textAlign: 'center' }}>
+            <div style={{ background: gradientMain, borderRadius: 10, padding: '20px 32px', color: '#fff', fontWeight: 600, fontSize: '1.1rem', boxShadow: `0 2px 8px ${primaryColor}22`, textAlign: 'center' }}>
               <span>📅 Latest school update: Parent-Teacher meeting on <b>September 15, 2025</b>.</span>
             </div>
           </div>
@@ -544,6 +861,23 @@ function DashboardParent() {
                         <span style={{fontSize:20,marginRight:4}}>✅</span>
                         <b>Status:</b> <span style={{color:'#38b2ac',fontWeight:700}}>Active</span>
                       </div>
+                      <div style={{fontSize:17, color:'#333', marginTop:18}}>
+                        <b>Teachers in Section:</b>
+                        <div style={{marginTop:6}}>
+                          {teachers.filter(t => Array.isArray(t.assignedSections) && t.assignedSections.some(sec => sec.sectionName === (student.section || student.sectionName))).length === 0 ? (
+                            <span style={{color:'#888'}}>No teachers found for this section.</span>
+                          ) : (
+                            teachers.filter(t => Array.isArray(t.assignedSections) && t.assignedSections.some(sec => sec.sectionName === (student.section || student.sectionName))).map(t => (
+                              <div key={t._id} style={{color:'#3182ce',fontWeight:600,marginBottom:4}}>
+                                {t.fullName || t.name || t.username}
+                                <div style={{fontSize:'0.98rem',color:'#555',marginLeft:8}}>
+                                  Contact: {t.contact || 'N/A'}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                   {/* Animations */}
@@ -619,30 +953,71 @@ function DashboardParent() {
           <div style={{ padding: '32px', maxWidth: 900, margin: '0 auto' }}>
             <h2 style={{ marginBottom: 8, fontWeight: 800, color: '#2196F3', letterSpacing: 1 }}>Announcements</h2>
             <p style={{ marginBottom: 24, fontSize: '1.1rem', color: '#2d3e50', fontWeight: 500 }}>Stay updated with the latest school news and announcements.</p>
+            {/* Unread count */}
+            {(() => {
+              let teacherAnnouncements = [];
+              let readAnnouncements = [];
+              try {
+                teacherAnnouncements = JSON.parse(localStorage.getItem('teacherAnnouncements')) || [];
+                readAnnouncements = JSON.parse(localStorage.getItem('parentReadAnnouncements')) || [];
+              } catch {}
+              const unreadCount = Array.isArray(teacherAnnouncements)
+                ? teacherAnnouncements.filter(a => !readAnnouncements.includes(a.id || a.timestamp)).length
+                : 0;
+              return (
+                <div style={{ marginBottom: 18, fontWeight: 700, color: '#f6ad55', fontSize: '1.08rem' }}>
+                  Unread Announcements: {unreadCount}
+                </div>
+              );
+            })()}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-              {/* Example announcement cards, replace with dynamic data as needed */}
-              <div style={{ background: 'linear-gradient(135deg, #2196F3 0%, #38b2ac 100%)', borderRadius: 14, padding: '24px 32px', boxShadow: '0 4px 24px rgba(33,150,243,0.10)', color: '#fff', position: 'relative' }}>
-                <div style={{ fontWeight: 700, fontSize: '1.2rem', marginBottom: 8 }}>Parent-Teacher Meeting</div>
-                <div style={{ fontWeight: 500, fontSize: '1rem', marginBottom: 12 }}>September 15, 2025</div>
-                <div style={{ fontWeight: 400, fontSize: '1rem', marginBottom: 12 }}>Join us for the Parent-Teacher meeting at the SPCC Auditorium. Your participation is important!</div>
-                <span style={{ background: '#fffbea', color: '#f6ad55', borderRadius: 8, padding: '6px 16px', fontWeight: 600, fontSize: '0.95rem', position: 'absolute', top: 24, right: 32 }}>Unread</span>
-              </div>
-              <div style={{ background: 'linear-gradient(135deg, #38b2ac 0%, #2196F3 100%)', borderRadius: 14, padding: '24px 32px', boxShadow: '0 4px 24px rgba(33,150,243,0.10)', color: '#fff', position: 'relative' }}>
-                <div style={{ fontWeight: 700, fontSize: '1.2rem', marginBottom: 8 }}>School Holiday</div>
-                <div style={{ fontWeight: 500, fontSize: '1rem', marginBottom: 12 }}>September 20, 2025</div>
-                <div style={{ fontWeight: 400, fontSize: '1rem', marginBottom: 12 }}>SPCC will be closed for a school holiday. Classes will resume on September 21.</div>
-                <span style={{ background: '#e6fffa', color: '#38b2ac', borderRadius: 8, padding: '6px 16px', fontWeight: 600, fontSize: '0.95rem', position: 'absolute', top: 24, right: 32 }}>Read</span>
-              </div>
-              <div style={{ background: 'linear-gradient(135deg, #ff4757 0%, #f6ad55 100%)', borderRadius: 14, padding: '24px 32px', boxShadow: '0 4px 24px rgba(255,71,87,0.10)', color: '#fff', position: 'relative' }}>
-                <div style={{ fontWeight: 700, fontSize: '1.2rem', marginBottom: 8 }}>Emergency Drill</div>
-                <div style={{ fontWeight: 500, fontSize: '1rem', marginBottom: 12 }}>September 25, 2025</div>
-                <div style={{ fontWeight: 400, fontSize: '1rem', marginBottom: 12 }}>There will be an emergency drill for all students and staff. Please follow instructions from teachers.</div>
-                <span style={{ background: '#fffbea', color: '#f6ad55', borderRadius: 8, padding: '6px 16px', fontWeight: 600, fontSize: '0.95rem', position: 'absolute', top: 24, right: 32 }}>Unread</span>
-              </div>
+              {/* Dynamic teacher announcements from localStorage with mark as read */}
+              {(() => {
+                let teacherAnnouncements = [];
+                let readAnnouncements = [];
+                try {
+                  teacherAnnouncements = JSON.parse(localStorage.getItem('teacherAnnouncements')) || [];
+                  readAnnouncements = JSON.parse(localStorage.getItem('parentReadAnnouncements')) || [];
+                } catch {}
+                if (!Array.isArray(teacherAnnouncements) || teacherAnnouncements.length === 0) {
+                  return <div style={{ color: '#888', fontWeight: 600 }}>No teacher announcements yet.</div>;
+                }
+                function markAsRead(id) {
+                  let read = Array.isArray(readAnnouncements) ? [...readAnnouncements] : [];
+                  if (!read.includes(id)) {
+                    read.push(id);
+                    localStorage.setItem('parentReadAnnouncements', JSON.stringify(read));
+                    setTimeout(() => {
+                      if (announcementUpdateRef.current) announcementUpdateRef.current();
+                    }, 50);
+                  }
+                }
+                return teacherAnnouncements.map(announcement => {
+                  const isRead = readAnnouncements.includes(announcement.id || announcement.timestamp);
+                  return (
+                    <div key={announcement.id || announcement.timestamp} style={{ background: isRead ? 'linear-gradient(135deg, #e6fffa 0%, #f7fafc 100%)' : 'linear-gradient(135deg, #2196F3 0%, #38b2ac 100%)', borderRadius: 14, padding: '24px 32px', boxShadow: '0 4px 24px rgba(33,150,243,0.10)', color: isRead ? '#333' : '#fff', position: 'relative' }}>
+                      <div style={{ fontWeight: 700, fontSize: '1.2rem', marginBottom: 8 }}>{announcement.title}</div>
+                      <div style={{ fontWeight: 500, fontSize: '1rem', marginBottom: 12 }}>{new Date(announcement.timestamp).toLocaleString()}</div>
+                      <div style={{ fontWeight: 400, fontSize: '1rem', marginBottom: 12 }}>{announcement.message}</div>
+                      <span style={{ background: '#fffbea', color: '#f6ad55', borderRadius: 8, padding: '6px 16px', fontWeight: 600, fontSize: '0.95rem', position: 'absolute', top: 24, right: 32 }}>From: {announcement.sender || 'Teacher'}</span>
+                      {!isRead && (
+                        <button onClick={() => markAsRead(announcement.id || announcement.timestamp)} style={{ marginTop: 16, background: '#fffbea', color: '#f6ad55', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 700, cursor: 'pointer', fontSize: '1rem' }}>Mark as Read</button>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
         )}
       </main>
+      {/* Responsive styles for hamburger/sidebar */}
+      <style>{`
+        @keyframes fadeInOverlay {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 }

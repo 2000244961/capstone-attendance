@@ -10,8 +10,8 @@ import { fetchSubjectSections } from '../features/students/pages/subjectSectionA
 
 
 function FaceRecognition() {
-  // Get current user and teacher profile from localStorage
-  const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+  // Get current user and teacher profile from context, prop, or global (not localStorage)
+  const currentUser = window.currentUser || null;
   const [profileData, setProfileData] = useState(null);
   const webcamRef = useRef(null);
   const [faceVisible, setFaceVisible] = useState(null);

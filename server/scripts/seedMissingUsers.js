@@ -10,6 +10,8 @@ const missingUserIds = [
   '68dfd7c45457c35ef32cd14e',
   '68db810802d5bdc4c966942e',
   '68dfdbab5457c35ef32cd1a3',
+  '68e68248873d6b94bad9cfb3',
+  '68e6828e873d6b94bad9cfd1', // <-- Add the new missing userId here
 ];
 
 async function seedMissingUsers() {

@@ -8,23 +8,9 @@ import { fetchUserProfile } from '../../../api/userApi';
 const ManageAttendance = () => {
         const navigate = useNavigate();
         const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-        // Read last selected section/subject from localStorage if available
-        const getInitialSection = () => {
-            try {
-                return localStorage.getItem('lastAttendanceSection') || '';
-            } catch {
-                return '';
-            }
-        };
-        const getInitialSubject = () => {
-            try {
-                return localStorage.getItem('lastAttendanceSubject') || '';
-            } catch {
-                return '';
-            }
-        };
-        const [selectedSection, setSelectedSection] = useState(getInitialSection());
-        const [selectedSubject, setSelectedSubject] = useState(getInitialSubject());
+        // Use React state only for section/subject (no localStorage)
+        const [selectedSection, setSelectedSection] = useState('');
+        const [selectedSubject, setSelectedSubject] = useState('');
     const [allowedSubjects, setAllowedSubjects] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [attendanceData, setAttendanceData] = useState([]);
@@ -37,14 +23,12 @@ const ManageAttendance = () => {
         const loadAttendance = async () => {
             setLoading(true);
             try {
-                // Get teacher info from localStorage
-                let teacherId = null;
-                try {
-                  const teacherData = JSON.parse(localStorage.getItem('currentUser'));
-                  if (teacherData && (teacherData._id || teacherData.username)) {
-                    teacherId = teacherData._id || teacherData.username;
-                  }
-                } catch {}
+                                // Get teacher info from backend/session/context (not localStorage)
+                                let teacherId = null;
+                                // Example: window.currentUser or from a React context
+                                if (window.currentUser && (window.currentUser._id || window.currentUser.username)) {
+                                    teacherId = window.currentUser._id || window.currentUser.username;
+                                }
                                 let allowedSectionsArr = [];
                                 let allowedSubjectsArr = [];
                                 if (teacherId) {

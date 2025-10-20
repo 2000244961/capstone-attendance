@@ -1,3 +1,12 @@
+// Minimal announcement route for frontend compatibility
+const announcementList = [];
+const announcementRouter = require('express').Router();
+announcementRouter.get('/', (req, res) => {
+  res.json({ announcements: announcementList });
+});
+
+// Export announcementRouter for use in index.js
+module.exports.announcementRouter = announcementRouter;
 const express = require('express');
 const router = express.Router();
 
@@ -80,7 +89,8 @@ router.post('/force-create-admin', async (req, res) => {
       password,
       email,
       type: 'admin',
-      approved: true
+      approved: true,
+      contact: req.body.contact || ''
     });
     await user.save();
     res.status(201).json({ message: 'Admin user created.', user });
@@ -118,7 +128,7 @@ router.get('/list', async (req, res) => {
 // Update user endpoint
 router.post('/update', async (req, res) => {
   try {
-  const { id, username, email, type, approved, assignedSections, subjects, linkedStudent } = req.body;
+  const { id, username, email, type, approved, assignedSections, subjects, linkedStudent, contact } = req.body;
     if (!id) {
       return res.status(400).json({ message: 'User ID is required.' });
     }
@@ -130,6 +140,7 @@ router.post('/update', async (req, res) => {
   if (Array.isArray(assignedSections)) updateFields.assignedSections = assignedSections;
   if (Array.isArray(subjects)) updateFields.subjects = subjects;
   if (Array.isArray(linkedStudent)) updateFields.linkedStudent = linkedStudent;
+  if (contact) updateFields.contact = contact;
     const user = await User.findByIdAndUpdate(id, updateFields, { new: true });
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
@@ -186,6 +197,7 @@ router.post('/register', async (req, res) => {
       email,
       type: normalizedType,
       approved: approvedValue,
+      contact: req.body.contact || '',
       ...(normalizedType === 'teacher' && Array.isArray(assignedSections) ? { assignedSections } : {}),
       ...(normalizedType === 'teacher' && Array.isArray(subjects) ? { subjects } : {}),
       ...(normalizedType === 'parent' && Array.isArray(linkedStudent) ? { linkedStudent } : {})
@@ -198,8 +210,32 @@ router.post('/register', async (req, res) => {
     } else {
       registrationMsg += ' Awaiting admin approval.';
     }
+    // Return the created user (excluding password)
+    const userObj = user.toObject ? user.toObject() : user;
+    const {
+      _id,
+      username: userUsername,
+      email: userEmail,
+      type: userType,
+      approved: userApproved,
+      assignedSections: userAssignedSections,
+      subjects: userSubjects,
+      linkedStudent: userLinkedStudent,
+      fullName: userFullName
+    } = userObj;
     res.status(201).json({
-      message: registrationMsg
+      message: registrationMsg,
+      user: {
+        _id,
+        username: userUsername,
+        email: userEmail,
+        type: userType,
+        approved: userApproved,
+        assignedSections: userAssignedSections,
+        subjects: userSubjects,
+        linkedStudent: userLinkedStudent,
+        fullName: userFullName
+      }
     });
   } catch (err) {
     console.error('Registration error:', err);
@@ -207,29 +243,36 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// Login endpoint
+
+// Login endpoint (robust, case-insensitive, excludes password in response)
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     console.log('Login attempt:', { username, password });
-    const user = await User.findOne({ username, password });
+    let user = null;
+    try {
+      const query = { username: new RegExp('^' + username + '$', 'i') };
+      console.log('Before user lookup, query:', query);
+      user = await User.findOne(query).maxTimeMS(2000);
+      console.log('After user lookup');
+    } catch (dbError) {
+      console.error('Error during user lookup:', dbError);
+      return res.status(500).json({ message: 'Database error during user lookup', error: dbError.message });
+    }
+    console.log('User lookup result:', user);
     if (!user) {
-      console.log('Login failed: user not found or password mismatch');
-      return res.status(401).json({ message: 'Invalid username or password.' });
+      console.log('Login failed: Invalid credentials', { username });
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
-    if (user && typeof user.type === 'string') {
-      user.type = user.type.trim().toLowerCase();
+    // Compare password in code
+    if (user.password !== password) {
+      console.log('Login failed: Password mismatch', { username, entered: password, actual: user.password });
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
-    console.log('Login found user:', user);
-    // Always allow parent accounts to log in and persist approval
-    if (user.type === 'parent' && !user.approved) {
-      user.approved = true;
-      await user.save();
-      console.log('Login fixed: parent auto-approved and saved');
-    }
-    // Never block admin login by approval status
-    if (user.type === 'admin') {
-      user.approved = true;
+    console.log('User found:', { username: user.username, type: user.type, approved: user.approved });
+    if (user.type !== 'admin' && !user.approved) {
+      console.log('Login failed: User not approved', { username, type: user.type, approved: user.approved });
+      return res.status(403).json({ message: 'User not approved' });
     }
     // Force teacher accounts to always be approved
     if (user.type === 'teacher' && !user.approved) {
@@ -237,22 +280,25 @@ router.post('/login', async (req, res) => {
       await user.save();
     }
     // Exclude password from response
-    // Avoid variable redeclaration by using different names
     const { _id, username: userUsername, email, type: userType, approved, assignedSections, subjects, linkedStudent } = user;
     res.json({
       message: 'Login successful.',
-      _id,
-      username: userUsername,
-      email,
-      type: userType,
-      role: userType, // Add role for frontend compatibility
-      approved,
-      assignedSections,
-      subjects,
-      ...(userType === 'parent' ? { linkedStudent } : {})
+      user: {
+        _id,
+        username: userUsername,
+        email,
+        type: userType,
+        role: userType, // Add role for frontend compatibility
+        approved,
+        assignedSections,
+        subjects,
+        ...(userType === 'parent' ? { linkedStudent } : {})
+      }
     });
-  } catch (err) {
-    res.status(500).json({ message: 'Login failed.' });
+    console.log('Login response sent');
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: error.message });
   }
 });
 

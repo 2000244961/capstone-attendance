@@ -5,6 +5,7 @@ const UserSchema = new mongoose.Schema({
   password: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   fullName: { type: String },
+  contact: { type: String },
   type: { type: String, enum: ['teacher', 'parent', 'admin'], required: true },
   approved: { type: Boolean, default: true }, // admin approval required
   createdAt: { type: Date, default: Date.now },

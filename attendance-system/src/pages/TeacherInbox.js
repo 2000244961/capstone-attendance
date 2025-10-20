@@ -14,8 +14,8 @@ import '../styles/TeacherInbox.css';
 function TeacherInbox() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
-  // Get current teacher user from localStorage
-  const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+  // Get current teacher user from context, prop, or global (not localStorage)
+  const currentUser = window.currentUser || null;
 
   const fetchMessages = () => {
     setLoading(true);
