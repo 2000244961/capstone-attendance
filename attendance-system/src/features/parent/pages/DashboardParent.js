@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import InboxIcon from '../../../shared/components/InboxIcon';
 import { useUser } from '../../../shared/UserContext';
@@ -79,18 +78,42 @@ function DashboardParent() {
   const [linkedStudents, setLinkedStudents] = useState([]);
   // Attendance records for linked students
   const [attendanceRecords, setAttendanceRecords] = useState([]);
+  // Filter date state and logic
+  const [filterDate, setFilterDate] = useState('');
+  const filteredAttendanceRecords = filterDate
+    ? attendanceRecords.filter(rec => {
+        // Normalize date comparison
+        const recDate = rec.date ? String(rec.date) : '';
+        const filterDateStr = String(filterDate);
+        const match = recDate.startsWith(filterDateStr);
+        if (!match) {
+          console.log('[DEBUG] Attendance record date', recDate, 'does not match filterDate', filterDateStr);
+        }
+        return match;
+      })
+    : attendanceRecords;
   // Fetch attendance records for linked students
   useEffect(() => {
     async function fetchAndFilterAttendance() {
       try {
         const allAttendance = await fetchAttendance();
-        // Filter attendance for linked students only
-        const linkedIds = linkedStudents.map(s => s._id || s.studentId);
+  const linkedStudentIds = linkedStudents.map(s => String(s.studentId)).filter(Boolean);
+  console.log('[Parent Dashboard] Linked numeric studentIds:', linkedStudentIds);
+        console.log('[Parent Dashboard] Raw attendance records:', allAttendance);
         const filtered = Array.isArray(allAttendance)
-          ? allAttendance.filter(a => linkedIds.includes(a.studentId || a.student_id || a.student?._id))
+          ? allAttendance.filter(a => {
+              const attId = String(a.studentId);
+              const match = linkedStudentIds.includes(attId);
+              if (!match) {
+                console.log('[Parent Dashboard] Attendance record not matched:', a, 'against numeric studentIds:', linkedStudentIds);
+              }
+              return match;
+            })
           : [];
+        console.log('[Parent Dashboard] Filtered attendance records:', filtered);
         setAttendanceRecords(filtered);
-      } catch {
+      } catch (err) {
+        console.error('[Parent Dashboard] Error fetching attendance:', err);
         setAttendanceRecords([]);
       }
     }
@@ -99,16 +122,19 @@ function DashboardParent() {
     } else {
       setAttendanceRecords([]);
     }
-  }, [JSON.stringify(linkedStudents)]);
+    // Also fetch attendance when switching to attendance section
+    // eslint-disable-next-line
+  }, [linkedStudents.length, JSON.stringify(linkedStudents), activeSection]);
 
   // Fetch all students and filter linked students
   useEffect(() => {
     fetchStudents().then(data => {
       let students = Array.isArray(data) ? data : (data.students || data.list || []);
       setAllStudents(students);
-      // Filter for linked students
-      if (linkedStudentIds.length > 0) {
-        setLinkedStudents(students.filter(s => linkedStudentIds.includes(s._id || s.studentId)));
+      // Always use string comparison for IDs
+      const normalizedLinkedIds = linkedStudentIds.map(id => String(id));
+      if (normalizedLinkedIds.length > 0) {
+        setLinkedStudents(students.filter(s => normalizedLinkedIds.includes(String(s._id)) || normalizedLinkedIds.includes(String(s.studentId))));
       } else {
         setLinkedStudents([]);
       }
@@ -724,14 +750,16 @@ function DashboardParent() {
             <div style={{ marginBottom: 32, background: '#f7fafc', borderRadius: 12, padding: '24px 32px', boxShadow: `0 2px 8px ${primaryColor}22` }}>
               <h3 style={{ marginBottom: 16, fontWeight: 700, color: primaryColor }}>Recently Linked Students</h3>
               <ul style={{ listStyle: 'none', padding: 0, display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-                {linkedStudents.length === 0 ? (
-                  <li style={{ color: '#888', fontWeight: 500 }}>No linked students found.</li>
-                ) : (
-                  linkedStudents.map(s => (
-                    <li key={s._id || s.studentId} style={{ background: '#e6fffa', borderRadius: 8, padding: '14px 24px', fontWeight: 600, color: primaryColor, minWidth: 160, boxShadow: `0 2px 8px ${primaryColor}10` }}>
-                      {s.fullName || s.name} <span style={{ color: primaryColor, fontWeight: 500 }}>({s.section || s.sectionName || '-'})</span>
-                    </li>
-                  ))
+                {(
+                  linkedStudents.length === 0 ? (
+                    <li style={{ color: '#888', fontWeight: 500 }}>No linked students found.</li>
+                  ) : (
+                    linkedStudents.map(s => (
+                      <li key={s._id || s.studentId} style={{ background: '#e6fffa', borderRadius: 8, padding: '14px 24px', fontWeight: 600, color: primaryColor, minWidth: 160, boxShadow: `0 2px 8px ${primaryColor}10` }}>
+                        {s.fullName || s.name} <span style={{ color: primaryColor, fontWeight: 500 }}>({s.section || s.sectionName || '-'})</span>
+                      </li>
+                    ))
+                  )
                 )}
               </ul>
             </div>
@@ -864,17 +892,19 @@ function DashboardParent() {
                       <div style={{fontSize:17, color:'#333', marginTop:18}}>
                         <b>Teachers in Section:</b>
                         <div style={{marginTop:6}}>
-                          {teachers.filter(t => Array.isArray(t.assignedSections) && t.assignedSections.some(sec => sec.sectionName === (student.section || student.sectionName))).length === 0 ? (
-                            <span style={{color:'#888'}}>No teachers found for this section.</span>
-                          ) : (
-                            teachers.filter(t => Array.isArray(t.assignedSections) && t.assignedSections.some(sec => sec.sectionName === (student.section || student.sectionName))).map(t => (
-                              <div key={t._id} style={{color:'#3182ce',fontWeight:600,marginBottom:4}}>
-                                {t.fullName || t.name || t.username}
-                                <div style={{fontSize:'0.98rem',color:'#555',marginLeft:8}}>
-                                  Contact: {t.contact || 'N/A'}
+                          {(
+                            teachers.filter(t => Array.isArray(t.assignedSections) && t.assignedSections.some(sec => sec.sectionName === (student.section || student.sectionName))).length === 0 ? (
+                              <span style={{color:'#888'}}>No teachers found for this section.</span>
+                            ) : (
+                              teachers.filter(t => Array.isArray(t.assignedSections) && t.assignedSections.some(sec => sec.sectionName === (student.section || student.sectionName))).map(t => (
+                                <div key={t._id} style={{color:'#3182ce',fontWeight:600,marginBottom:4}}>
+                                  {t.fullName || t.name || t.username}
+                                  <div style={{fontSize:'0.98rem',color:'#555',marginLeft:8}}>
+                                    Contact: {t.contact || 'N/A'}
+                                  </div>
                                 </div>
-                              </div>
-                            ))
+                              ))
+                            )
                           )}
                         </div>
                       </div>
@@ -901,6 +931,38 @@ function DashboardParent() {
           <div style={{ padding: '32px', maxWidth: 900, margin: '0 auto' }}>
             <h2 style={{ marginBottom: 8, fontWeight: 800, color: '#2196F3', letterSpacing: 1 }}>Attendance Records</h2>
             <p style={{ marginBottom: 24, fontSize: '1.1rem', color: '#2d3e50', fontWeight: 500 }}>Check your students' attendance history and details.</p>
+            <div style={{marginBottom:24,display:'flex',alignItems:'center',gap:12}}>
+              <label htmlFor="attendance-date" style={{fontWeight:600}}>Filter by Date:</label>
+              <input id="attendance-date" type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} style={{padding:'6px 12px',borderRadius:6,border:'1px solid #b6d0f7',fontWeight:500}} />
+              <button onClick={()=>setFilterDate('')} style={{padding:'6px 14px',borderRadius:6,background:'#eee',fontWeight:600,border:'none',cursor:'pointer'}}>Clear</button>
+              <button onClick={()=>{
+                // Manual refresh attendance
+                async function refreshAttendance() {
+                  try {
+                    const allAttendance = await fetchAttendance();
+                    const linkedIds = linkedStudents.map(s => String(s._id || s.studentId));
+                    console.log('[Parent Dashboard] [Manual Refresh] Linked student IDs:', linkedIds);
+                    console.log('[Parent Dashboard] [Manual Refresh] Raw attendance records:', allAttendance);
+                    const filtered = Array.isArray(allAttendance)
+                      ? allAttendance.filter(a => {
+                          const attId = String(a.studentId || a.student_id || a.student?._id || a.student);
+                          const match = linkedIds.includes(attId);
+                          if (!match) {
+                            console.log('[Parent Dashboard] [Manual Refresh] Attendance record not matched:', a, 'against IDs:', linkedIds);
+                          }
+                          return match;
+                        })
+                      : [];
+                    console.log('[Parent Dashboard] [Manual Refresh] Filtered attendance records:', filtered);
+                    setAttendanceRecords(filtered);
+                  } catch (err) {
+                    console.error('[Parent Dashboard] [Manual Refresh] Error fetching attendance:', err);
+                    setAttendanceRecords([]);
+                  }
+                }
+                refreshAttendance();
+              }} style={{padding:'6px 14px',borderRadius:6,background:primaryColor,color:'#fff',fontWeight:600,border:'none',cursor:'pointer'}}>Refresh</button>
+            </div>
             <div style={{ boxShadow: '0 4px 24px rgba(33,150,243,0.10)', border: '1px solid #e2e8f0', background: '#fff', borderRadius: 18, padding: '0', marginBottom: 32, overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 600 }}>
                 <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
@@ -913,12 +975,16 @@ function DashboardParent() {
                   </tr>
                 </thead>
                 <tbody>
-                  {attendanceRecords.length === 0 ? (
+                  {filteredAttendanceRecords.length === 0 ? (
                     <tr><td colSpan="5" style={{ textAlign: 'center', color: '#888', fontWeight: 500, padding: 32 }}>No attendance records found.</td></tr>
                   ) : (
-                    attendanceRecords.map((rec, idx) => {
-                      const student = linkedStudents.find(s => (s._id || s.studentId) === (rec.studentId || rec.student_id || rec.student?._id));
-                      if (!student) return null;
+                    filteredAttendanceRecords.map((rec, idx) => {
+                      // Match student using only numeric studentId
+                      const student = linkedStudents.find(s => String(s.studentId) === String(rec.studentId));
+                      if (!student) {
+                        console.log('[DEBUG] No matching student for attendance record:', rec);
+                        return null;
+                      }
                       let badgeColor = '#38b2ac', badgeBg = '#e6fffa', badgeText = 'Present';
                       if (rec.status && rec.status.toLowerCase() === 'late') { badgeColor = '#f6ad55'; badgeBg = '#fffbea'; badgeText = 'Late'; }
                       else if (rec.status && rec.status.toLowerCase() === 'absent') { badgeColor = '#ff4757'; badgeBg = '#ffeaea'; badgeText = 'Absent'; }
@@ -928,7 +994,9 @@ function DashboardParent() {
                           onMouseOver={e => e.currentTarget.style.background = '#e3f2fd'}
                           onMouseOut={e => e.currentTarget.style.background = idx % 2 === 0 ? '#fff' : '#f7fafc'}>
                           <td style={{ padding: '14px 10px', fontWeight: 500 }}>{rec.date ? new Date(rec.date).toLocaleDateString() : '-'}</td>
-                          <td style={{ padding: '14px 10px', fontWeight: 500 }}>{rec.time || '-'}</td>
+                          <td style={{ padding: '14px 10px', fontWeight: 500 }}>
+                            {rec.timestamp ? new Date(rec.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : (rec.time || '-')}
+                          </td>
                           <td style={{ padding: '14px 10px', fontWeight: 500 }}>{student.section || student.sectionName || '-'}</td>
                           <td style={{ padding: '14px 10px', fontWeight: 500 }}>{student.fullName || student.name || '-'}</td>
                           <td style={{ padding: '14px 0', fontWeight: 700 }}>

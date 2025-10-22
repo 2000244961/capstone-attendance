@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
+import AttendanceBarGraphSVG from '../components/AttendanceBarGraphSVG';
 import { useUser } from '../shared/UserContext';
 import '../styles/DashboardTeacher.css';
 import { useNavigate } from 'react-router-dom';
@@ -30,19 +31,15 @@ function TodayAttendanceSummary({ studentsInSections }) {
 			.catch(() => setSummary({ present: 0, absent: 0 }));
 	}, []);
 	return (
-		<div className="dashboard-card redesigned-card" style={{ background: '#e3fcec', border: '2px solid #38a169', marginTop: 24, display: 'flex', gap: 24, justifyContent: 'center' }}>
-			<div style={{ textAlign: 'center', minWidth: 120 }}>
-				<div style={{ fontSize: 32, color: '#38a169', marginBottom: 8 }}>✅</div>
-				<div className="dashboard-card-title">Present Today</div>
-				<div className="dashboard-card-value" style={{ color: '#38a169' }}>{summary.present}</div>
-				<div className="dashboard-card-desc">Students present today</div>
+		<div className="dashboard-card redesigned-card" style={{ background: '#ffeaea', border: '2px solid #010662', padding: '24px 18px', borderRadius: '16px', boxShadow: '0 2px 8px rgba(1,6,98,0.08)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, minHeight: 220 }}>
+			<div className="dashboard-card-icon" style={{ fontSize: 32, color: '#010662', marginBottom: 8 }}>📝</div>
+			<div className="dashboard-card-title" style={{ fontWeight: 700, fontSize: 20, marginBottom: 8, color: '#010662' }}>Today's Attendance</div>
+			<AttendanceBarGraphSVG present={summary.present} absent={summary.absent} />
+			<div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: 220, marginTop: 8 }}>
+				<span style={{ color: '#38a169', fontWeight: 500 }}>Present: {summary.present}</span>
+				<span style={{ color: '#ff4757', fontWeight: 500 }}>Absent: {summary.absent}</span>
 			</div>
-			<div style={{ textAlign: 'center', minWidth: 120 }}>
-				<div style={{ fontSize: 32, color: '#ff4757', marginBottom: 8 }}>❌</div>
-				<div className="dashboard-card-title">Absent Today</div>
-				<div className="dashboard-card-value" style={{ color: '#ff4757' }}>{summary.absent}</div>
-				<div className="dashboard-card-desc">Students absent today</div>
-			</div>
+			<div className="dashboard-card-desc" style={{ marginTop: 8, color: '#222', fontSize: 15 }}>Attendance summary for today</div>
 		</div>
 	);
 }
@@ -575,11 +572,35 @@ useEffect(() => {
 							   <div className="admin-user-info" style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
 								   <span className="icon">👤</span>
 								   <span className="username" style={{ color: '#fff', fontWeight: 600 }}>{teacherName}</span>
-								   <NotificationIcon 
-									   unreadCount={notifications.unreadCount}
-									   onClick={notifications.toggleNotifications}
-									   color="#fff"
-								   />
+								   <div style={{ position: 'relative', display: 'inline-block' }}>
+									   <NotificationIcon 
+										   unreadCount={notifications.unreadCount}
+										   onClick={notifications.toggleNotifications}
+										   color="#fff"
+									   />
+									   {notifications.unreadCount > 0 && (
+										   <span style={{
+											   position: 'absolute',
+											   top: 2,
+											   right: 2,
+											   background: '#ff4757',
+											   color: '#fff',
+											   borderRadius: '50%',
+											   minWidth: 18,
+											   height: 18,
+											   display: 'flex',
+											   alignItems: 'center',
+											   justifyContent: 'center',
+											   fontSize: 10,
+											   fontWeight: 'bold',
+											   padding: '0 5px',
+											   boxShadow: '0 2px 8px rgba(1,6,98,0.10)',
+											   zIndex: 2
+										   }}>
+											   {notifications.unreadCount > 99 ? '99+' : notifications.unreadCount}
+										   </span>
+									   )}
+								   </div>
 								   <InboxIcon onClick={() => setActiveSection('inbox')} unreadCount={unreadInboxCount} color="#fff" />
 								   <button className="dashboard-btn" style={{ background: '#fff', color: '#010662', fontWeight: 700, border: 'none', borderRadius: 6, padding: '8px 18px', cursor: 'pointer' }} onClick={() => { setShowProfile(true); fetchProfile(); }}>View Profile</button>
 								   <button className="logout-button" style={{ background: '#ff4757', color: '#fff', fontWeight: 700, border: 'none', borderRadius: 6, padding: '8px 18px', cursor: 'pointer' }} onClick={handleLogout}>Logout</button>
@@ -600,33 +621,32 @@ useEffect(() => {
 								   <h2 style={{fontWeight:700, fontSize:28, color:'#010662', marginBottom:24, display:'flex',alignItems:'center',gap:10}}>
 									   <span role="img" aria-label="dashboard">📊</span> Dashboard Overview
 								   </h2>
-								   <div className="dashboard-overview-cards redesigned-cards">
+								   <div className="dashboard-overview-cards redesigned-cards" style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'32px'}}>
 									   <div className="dashboard-card redesigned-card" style={{background:'#e3f2fd', border: '2px solid #010662'}}>
 										   <div className="dashboard-card-icon" style={{fontSize:32, color:'#010662', marginBottom:8}}>📚</div>
-										<div className="dashboard-card-title">Assigned Subjects</div>
-										<div className="dashboard-card-value" style={{color:'#2196F3'}}>{subjectsHandled}</div>
-										<div className="dashboard-card-desc">Subjects you handle</div>
-									</div>
+										   <div className="dashboard-card-title">Assigned Subjects</div>
+										   <div className="dashboard-card-value" style={{color:'#2196F3'}}>{subjectsHandled}</div>
+										   <div className="dashboard-card-desc">Subjects you handle</div>
+									   </div>
 									   <div className="dashboard-card redesigned-card" style={{background:'#e6fffa', border: '2px solid #010662'}}>
 										   <div className="dashboard-card-icon" style={{fontSize:32, color:'#010662', marginBottom:8}}>🏫</div>
-										<div className="dashboard-card-title">Assigned Sections</div>
-										<div className="dashboard-card-value" style={{color:'#38b2ac'}}>{
-											(profileData && Array.isArray(profileData.assignedSections) && profileData.assignedSections.length > 0)
-												? profileData.assignedSections.length
-												: 0
-										}</div>
-										<div className="dashboard-card-desc">Sections assigned to you</div>
-									</div>
+										   <div className="dashboard-card-title">Assigned Sections</div>
+										   <div className="dashboard-card-value" style={{color:'#38b2ac'}}>{
+											   (profileData && Array.isArray(profileData.assignedSections) && profileData.assignedSections.length > 0)
+												   ? profileData.assignedSections.length
+												   : 0
+										   }</div>
+										   <div className="dashboard-card-desc">Sections assigned to you</div>
+									   </div>
 									   <div className="dashboard-card redesigned-card" style={{background:'#fffbea', border: '2px solid #010662'}}>
 										   <div className="dashboard-card-icon" style={{fontSize:32, color:'#010662', marginBottom:8}}>👥</div>
-										<div className="dashboard-card-title">Total Students</div>
-										<div className="dashboard-card-value" style={{color:'#f6ad55'}}>{studentsInSections}</div>
-										<div className="dashboard-card-desc">Students you handle</div>
-									</div>
-									   {/* Removed 'Classes Today' card as requested */}
-								</div>
-																		{/* Today's Attendance Summary: Present and Absent (using backend summary) */}
-																		<TodayAttendanceSummary studentsInSections={studentsInSections} />
+										   <div className="dashboard-card-title">Total Students</div>
+										   <div className="dashboard-card-value" style={{color:'#f6ad55'}}>{studentsInSections}</div>
+										   <div className="dashboard-card-desc">Students you handle</div>
+									   </div>
+									   {/* Move the existing TodayAttendanceSummary here for Present/Absent Today cards */}
+									   <TodayAttendanceSummary studentsInSections={studentsInSections} />
+								   </div>
 							</div>
 						)}
 								{activeSection === 'inbox' && (
@@ -888,7 +908,7 @@ useEffect(() => {
 									</div>
 								)}
 						{activeSection === 'announcement' && (
-							<div className="announcement-section" style={{maxWidth: 600, margin: '0 auto', padding: 32}}>
+							<div className="announcement-section" style={{maxWidth: 1600, margin: '0 auto', padding: '72px 96px'}}>
 								<h2 style={{display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 28, color: '#2b6cb0'}}>
 									<span role="img" aria-label="announcement">📢</span> Announcements
 								</h2>

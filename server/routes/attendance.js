@@ -3,6 +3,39 @@ const Attendance = require('../models/Attendance');
 const { sendMail } = require('../utils/mailer');
 const { findParentEmailByStudentId } = require('../utils/findParentEmail');
 const router = express.Router();
+
+// Get attendance summary grouped by section for a given date (or today if not specified)
+router.get('/sections', async (req, res) => {
+  try {
+    let date = req.query.date;
+    if (!date) {
+      date = new Date().toISOString().slice(0, 10);
+    }
+    // Get DB records
+    const dbRecords = await Attendance.find({ date });
+    // Get localStorage records if available (for demo/testing)
+    let localRecords = [];
+    if (global.localAttendanceRecords && Array.isArray(global.localAttendanceRecords)) {
+      localRecords = global.localAttendanceRecords.filter(r => r.date === date);
+    }
+    // Merge DB and local records
+    const allRecords = [...dbRecords, ...localRecords];
+    // Group by section
+    const sectionMap = {};
+    allRecords.forEach(r => {
+      const section = r.section || 'Unassigned';
+      if (!sectionMap[section]) {
+        sectionMap[section] = { section, present: 0, absent: 0 };
+      }
+      if (r.status === 'present') sectionMap[section].present++;
+      if (r.status === 'absent') sectionMap[section].absent++;
+    });
+    const result = Object.values(sectionMap);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+  });
 // Get today's attendance summary
 router.get('/today', async (req, res) => {
   try {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../shared/UserContext';
 import NotificationIcon from '../shared/components/NotificationIcon';
@@ -13,7 +14,7 @@ import { fetchStudents } from '../api/studentApi';
 import { fetchInbox, deleteMessage, sendAdminMessageToMany } from '../api/messageApi';
 import { fetchSentMessagesWithRole } from '../api/fetchSentMessagesWithRole';
 import { deleteUser as apiDeleteUser } from '../api/userApi';
-import { fetchTodayAttendanceSummaryAll } from '../api/attendanceApi';
+import { fetchTodayAttendanceSummaryAll, fetchAttendanceBySection } from '../api/attendanceApi';
 
 
 
@@ -287,6 +288,7 @@ function DashboardAdmin() {
   const [subjectSectionList, setSubjectSectionList] = useState([]);
   // Section attendance summary for report
   const [sectionAttendance, setSectionAttendance] = useState([]);
+  const [reportDate, setReportDate] = useState(() => new Date().toISOString().slice(0, 10));
   // Student list for parent linking
   const [studentList, setStudentList] = useState([]);
 
@@ -549,19 +551,25 @@ function DashboardAdmin() {
     // Fetch today's attendance summary for the whole school
     fetchTodayAttendanceSummaryAll().then(data => {
       setAttendanceData(data);
-      // Aggregate per section for report
-      if (Array.isArray(data.sections)) {
-        setSectionAttendance(data.sections);
-      } else if (Array.isArray(data.attendanceBySection)) {
-        setSectionAttendance(data.attendanceBySection);
-      } else {
-        setSectionAttendance([]);
-      }
     }).catch(() => {
       setAttendanceData({ present: 0, absent: 0, late: 0 });
+    });
+    // Fetch section attendance for reports (default: today)
+    fetchAttendanceBySection(reportDate).then(data => {
+      setSectionAttendance(Array.isArray(data) ? data : []);
+    }).catch(() => {
       setSectionAttendance([]);
     });
   }, []);
+
+  // Update section attendance when reportDate changes
+  useEffect(() => {
+    fetchAttendanceBySection(reportDate).then(data => {
+      setSectionAttendance(Array.isArray(data) ? data : []);
+    }).catch(() => {
+      setSectionAttendance([]);
+    });
+  }, [reportDate]);
 
   // Delete message handler
   // Delete message handler for admin inbox (localStorage or backend)
@@ -721,11 +729,30 @@ function DashboardAdmin() {
             <div className="admin-header-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h2 style={{margin: '10px 0 10px 60px', fontSize:'2rem', color:'#fff', fontWeight:700, fontFamily: 'sans-serif'}}>Admin Dashboard</h2>
               <div className="admin-user-info" style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-                <NotificationIcon 
-                  unreadCount={notifications.unreadCount}
-                  onClick={notifications.toggleNotifications}
-                  color="#fff"
-                />
+                <div style={{ position: 'relative', display: 'inline-block' }}>
+                  <NotificationIcon 
+                    unreadCount={notifications.unreadCount}
+                    onClick={notifications.toggleNotifications}
+                    color="#fff"
+                  />
+                  {notifications.unreadCount > 0 && (
+                    <span style={{
+                      position: 'absolute',
+                      top: -6,
+                      right: -6,
+                      background: '#ff4757',
+                      color: '#fff',
+                      borderRadius: '50%',
+                      padding: '2px 7px',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      border: '2px solid #fff',
+                      zIndex: 2
+                    }}>
+                      {notifications.unreadCount > 99 ? '99+' : notifications.unreadCount}
+                    </span>
+                  )}
+                </div>
                 <InboxIcon onClick={() => setActiveSection('inbox')} color="#fff" />
                 <span className="icon">👤</span>
                 <span className="username" style={{ color: '#fff', fontWeight: 600 }}>Administrator</span>
@@ -1054,6 +1081,37 @@ function DashboardAdmin() {
           {activeSection === 'reports' && (
             <div className="dashboard-reports-section">
               <h2>Reports</h2>
+              <div style={{marginBottom: 18, display: 'flex', alignItems: 'center', gap: 16}}>
+                <label htmlFor="report-date" style={{fontWeight: 600}}>Select Date:</label>
+                <input
+                  id="report-date"
+                  type="date"
+                  value={reportDate}
+                  onChange={e => setReportDate(e.target.value)}
+                  style={{padding: '6px 12px', borderRadius: 6, border: '1px solid #b6d0f7', fontWeight: 500}}
+                  max={new Date().toISOString().slice(0, 10)}
+                />
+              </div>
+              <button
+                className="dashboard-btn primary"
+                style={{marginBottom: 12}}
+                onClick={() => {
+                  if (!sectionAttendance || sectionAttendance.length === 0) return;
+                  // Prepare worksheet data
+                  const wsData = [
+                    ['Section', 'Present', 'Absent'],
+                    ...sectionAttendance.map(sec => [
+                      sec.section || sec.sectionName || '',
+                      sec.present || 0,
+                      sec.absent || 0
+                    ])
+                  ];
+                  const ws = XLSX.utils.aoa_to_sheet(wsData);
+                  const wb = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+                  XLSX.writeFile(wb, `section-attendance-${reportDate || 'date'}.xlsx`);
+                }}
+              >Export to Excel</button>
               <div className="reports-panel">
                 <table className="dashboard-table">
                   <thead>
@@ -1065,7 +1123,7 @@ function DashboardAdmin() {
                   </thead>
                   <tbody>
                     {sectionAttendance.length === 0 ? (
-                      <tr><td colSpan="3" style={{textAlign:'center',color:'#888'}}>No attendance data for today.</td></tr>
+                      <tr><td colSpan="3" style={{textAlign:'center',color:'#888'}}>No attendance data for this date.</td></tr>
                     ) : (
                       sectionAttendance.map((sec, idx) => (
                         <tr key={sec.section || idx}>

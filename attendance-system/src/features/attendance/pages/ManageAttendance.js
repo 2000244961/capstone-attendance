@@ -1,3 +1,4 @@
+import { exportAttendanceToExcel } from './exportAttendance';
 import React, { useState, useEffect, useMemo } from 'react';
 import { io } from 'socket.io-client';
 import { useNavigate } from 'react-router-dom';
@@ -31,37 +32,68 @@ const ManageAttendance = () => {
                                 }
                                 let allowedSectionsArr = [];
                                 let allowedSubjectsArr = [];
-                                if (teacherId) {
-                                    try {
-                                        const profile = await fetchUserProfile(teacherId);
-                                        if (profile && Array.isArray(profile.assignedSections)) {
-                                            allowedSectionsArr = profile.assignedSections.map(s => s.sectionName);
-                                            // Collect subjects for each section
-                                            if (profile.assignedSections.some(s => s.subjects)) {
-                                                if (selectedSection) {
-                                                    // Only subjects for selected section
-                                                    const sectionObj = profile.assignedSections.find(s => s.sectionName === selectedSection);
-                                                    allowedSubjectsArr = sectionObj && Array.isArray(sectionObj.subjects) ? sectionObj.subjects : [];
-                                                } else {
-                                                    // All subjects from all sections
-                                                    allowedSubjectsArr = profile.assignedSections.flatMap(s => s.subjects || []);
-                                                    allowedSubjectsArr = [...new Set(allowedSubjectsArr)];
-                                                }
-                                            }
+                    if (teacherId) {
+                        try {
+                            const profile = await fetchUserProfile(teacherId);
+                            console.log('Teacher profile:', profile);
+                            if (profile && Array.isArray(profile.assignedSections)) {
+                                allowedSectionsArr = profile.assignedSections.map(s => s.sectionName);
+                                // Collect subjects for each section
+                                if (profile.assignedSections.some(s => s.subjects)) {
+                                    if (selectedSection) {
+                                        // Only subjects for selected section
+                                        const sectionObj = profile.assignedSections.find(s => s.sectionName === selectedSection);
+                                        allowedSubjectsArr = sectionObj && Array.isArray(sectionObj.subjects) ? sectionObj.subjects : [];
+                                        // Fallback: if no subjects for selected section, show all subjects
+                                        if (!allowedSubjectsArr.length) {
+                                            allowedSubjectsArr = profile.assignedSections.flatMap(s => s.subjects || []);
+                                            allowedSubjectsArr = [...new Set(allowedSubjectsArr)];
                                         }
-                                    } catch {}
+                                    } else {
+                                        // All subjects from all sections
+                                        allowedSubjectsArr = profile.assignedSections.flatMap(s => s.subjects || []);
+                                        allowedSubjectsArr = [...new Set(allowedSubjectsArr)];
+                                    }
                                 }
-                                setAllowedSections(allowedSectionsArr);
-                                setAllowedSubjects(allowedSubjectsArr);
-                const data = await fetchAttendance();
-                // Only show records for allowed sections
-                const filtered = data.filter(record =>
-                  record.date === selectedDate &&
-                  record.viaFacialRecognition === true &&
-                  (allowedSectionsArr.length === 0 || allowedSectionsArr.includes(record.section))
-                );
-                setAttendanceData(filtered);
-                setLastUpdate(Date.now());
+                            }
+                        } catch {}
+                    }
+                    // Only show sections that exist in the attendance data for this teacher and date
+                    const data = await fetchAttendance();
+                    // Show all sections present in today's attendance records
+                    const sectionSet = new Set();
+                    data.forEach(record => {
+                        if (
+                            record.date === selectedDate &&
+                            record.viaFacialRecognition === true &&
+                            record.section
+                        ) {
+                            sectionSet.add(record.section);
+                        }
+                    });
+                    setAllowedSections(Array.from(sectionSet));
+                    // Show all subjects present in today's attendance records (filtered by section if selected)
+                    const subjectSet = new Set();
+                    data.forEach(record => {
+                        if (
+                            record.date === selectedDate &&
+                            record.viaFacialRecognition === true &&
+                            record.subject &&
+                            (!selectedSection || record.section === selectedSection)
+                        ) {
+                            subjectSet.add(record.subject);
+                        }
+                    });
+                    setAllowedSubjects(Array.from(subjectSet));
+                    console.log('Allowed subjects:', Array.from(subjectSet));
+                    // Only show records for allowed sections
+                    const filtered = data.filter(record =>
+                                            String(record.date) === String(selectedDate) &&
+                                            record.viaFacialRecognition === true &&
+                                            (allowedSectionsArr.length === 0 || allowedSectionsArr.includes(record.section))
+                                        );
+                    setAttendanceData(filtered);
+                    setLastUpdate(Date.now());
             } catch (err) {
                 setError('Failed to load attendance records');
             }
@@ -90,12 +122,16 @@ const ManageAttendance = () => {
     // Filter attendance data
     const filteredAttendance = useMemo(() => {
         return attendanceData.filter(record => {
+            const matchesDate = String(record.date) === String(selectedDate);
             const matchesSection = !selectedSection || record.section === selectedSection;
             const matchesSubject = !selectedSubject || record.subject === selectedSubject;
             const matchesSearch = !searchTerm || 
                 record.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                record.studentId.toLowerCase().includes(searchTerm.toLowerCase());
-            return matchesSection && matchesSubject && matchesSearch;
+                String(record.studentId).toLowerCase().includes(searchTerm.toLowerCase());
+            if (!matchesDate) {
+              console.log('[DEBUG] Attendance record date', record.date, 'does not match selectedDate', selectedDate);
+            }
+            return matchesDate && matchesSection && matchesSubject && matchesSearch;
         });
     }, [attendanceData, selectedSection, selectedSubject, searchTerm]);
 
@@ -219,14 +255,18 @@ const ManageAttendance = () => {
                         id="section"
                         value={selectedSection}
                         onChange={(e) => {
-                          setSelectedSection(e.target.value);
-                          setSelectedSubject(''); // Reset subject when section changes
+                            setSelectedSection(e.target.value);
+                            setSelectedSubject(''); // Reset subject when section changes
                         }}
                     >
                         <option value="">All Sections</option>
-                        {allowedSections.map(section => (
-                          <option key={section} value={section}>{section}</option>
-                        ))}
+                        {allowedSections.length === 0 ? (
+                            <option value="" disabled>No sections available</option>
+                        ) : (
+                            allowedSections.map(section => (
+                                <option key={section} value={section}>{section}</option>
+                            ))
+                        )}
                     </select>
                 </div>
                 <div className="filter-group">
@@ -239,19 +279,29 @@ const ManageAttendance = () => {
                     >
                         <option value="">All Subjects</option>
                         {allowedSubjects.map(subject => (
-                          <option key={subject} value={subject}>{subject}</option>
+                            <option key={subject} value={subject}>{subject}</option>
                         ))}
                     </select>
                 </div>
-                <div className="filter-group">
-                    <label htmlFor="search">🔍 Search:</label>
-                    <input
-                        type="text"
-                        id="search"
-                        placeholder="Search by name or student ID..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+                <div className="filter-group" style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <label htmlFor="search">🔍 Search:</label>
+                        <input
+                            type="text"
+                            id="search"
+                            placeholder="Search by name or student ID..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    <button
+                        className="dashboard-btn"
+                        style={{ background: '#38a169', color: '#fff', fontWeight: 700, borderRadius: 6, padding: '8px 18px', cursor: selectedSection && selectedSubject ? 'pointer' : 'not-allowed', opacity: selectedSection && selectedSubject ? 1 : 0.5, marginBottom: 0 }}
+                        disabled={!selectedSection || !selectedSubject}
+                        onClick={() => exportAttendanceToExcel(attendanceData, selectedSection, selectedSubject)}
+                    >
+                        Export to Excel
+                    </button>
                 </div>
             </div>
             {/* Summary Cards */}
@@ -285,7 +335,7 @@ const ManageAttendance = () => {
                     </div>
                 </div>
             </div>
-            {/* Attendance Table */}
+            {/* Export button moved beside search input above */}
             <div className="table-container">
                 <div className="table-header">
                     <div className="table-title-section">

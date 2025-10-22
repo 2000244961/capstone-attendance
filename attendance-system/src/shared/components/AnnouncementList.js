@@ -1,5 +1,6 @@
+
 import React, { useEffect, useState } from 'react';
-// import { fetchAnnouncements } from '../../api/announcementApi';
+import './Announcement.css';
 
 
 const AnnouncementList = () => {
@@ -43,25 +44,25 @@ const AnnouncementList = () => {
   };
 
   return (
-    <div className="announcement-list" style={{background: '#f7fafc', borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.07)', padding: 24, marginTop: 24}}>
-      <ul className="notification-list" style={{ maxHeight: '60vh', overflowY: 'auto', margin: 0, padding: 0 }}>
+    <div className="announcement-list">
+      <ul className="notification-list">
         {announcements.length === 0 ? (
           <li className="notification-empty">No announcements</li>
         ) : (
           announcements.map(a => (
-            <li key={a.id} className={`notification-item`} style={{ borderLeft: `4px solid #3182ce` }}>
+            <li key={a.id} className="notification-item">
               <span className="notification-icon">{a.icon || '📢'}</span>
               <div className="notification-info">
                 <div className="notification-title">{a.title}</div>
                 <div className="notification-message">{a.message}</div>
                 {a.sender && (
-                  <div className="notification-sender" style={{ color: '#888', fontSize: '0.95em', marginTop: 2 }}>
+                  <div className="notification-sender">
                     <b>From:</b> {a.sender}
                   </div>
                 )}
                 <div className="notification-time">{formatTimeAgo(a.timestamp)}</div>
               </div>
-              <button onClick={() => handleDelete(a.id)} style={{ marginLeft: 12, background: '#ff4757', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>Delete</button>
+              <button onClick={() => handleDelete(a.id)}>Delete</button>
             </li>
           ))
         )}
