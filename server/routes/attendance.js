@@ -70,14 +70,46 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
   console.log('Received attendance POST:', req.body);
-    const { studentId, date, name, section, subject } = req.body;
-    // Check for existing record for this student, subject, and date
-    const existing = await Attendance.findOne({ studentId, subject, date });
-    if (existing) {
-      return res.status(409).json({ error: 'Attendance already recorded for this student for this subject today.' });
+  const { studentId, date, name, section, subject, status } = req.body;
+  // Check for existing record for this student, subject, and date
+  const existing = await Attendance.findOne({ studentId, subject, date });
+  if (existing) {
+    return res.status(409).json({ error: 'Attendance already recorded for this student for this subject today.' });
+  }
+
+  // Time-based attendance rule
+  let scanTime = req.body.time;
+  let scanDateObj;
+  if (scanTime) {
+    // Try to parse as local time (HH:mm or HH:mm:ss)
+    const timeParts = scanTime.split(':');
+    if (timeParts.length >= 2) {
+      // Build a local date string
+      const now = new Date();
+      scanDateObj = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(timeParts[0]), parseInt(timeParts[1]), timeParts[2] ? parseInt(timeParts[2]) : 0);
+    } else {
+      scanDateObj = new Date();
     }
-    const newRecord = new Attendance(req.body);
-    await newRecord.save();
+  } else {
+    scanDateObj = new Date();
+  }
+  // Get hours and minutes
+  const hours = scanDateObj.getHours();
+  const minutes = scanDateObj.getMinutes();
+  let attendanceStatus = status;
+  if (attendanceStatus === 'present') {
+    // Only allow present between 6:00 AM and 4:00 PM (16:00)
+    const isAfterStart = (hours > 6 || (hours === 6 && minutes >= 0));
+    const isBeforeEnd = (hours < 16 || (hours === 16 && minutes === 0));
+    if (isAfterStart && isBeforeEnd) {
+      attendanceStatus = 'present';
+    } else {
+      attendanceStatus = 'absent';
+    }
+  }
+  // Create new attendance record with enforced status
+  const newRecord = new Attendance({ ...req.body, status: attendanceStatus });
+  await newRecord.save();
     // Emit real-time event if Socket.IO is available
     if (req.io) {
       req.io.emit('attendance:new', newRecord);

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useUser } from '../shared/UserContext';
-import NotificationIcon from '../shared/components/NotificationIcon';
+
 import InboxIcon from '../shared/components/InboxIcon';
-import NotificationDropdown from '../shared/components/NotificationDropdown';
+
 import { fetchInbox, sendExcuseLetter, fetchSentMessages } from '../api/messageApi';
 import { fetchAllTeachers } from '../api/userApi';
 import '../styles/DashboardParent.css';
@@ -349,20 +349,8 @@ function DashboardParent() {
             <h1 style={{fontSize:'2rem',fontWeight:700,margin:0,letterSpacing:'0.5px'}}>Parent Dashboard</h1>
             <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:18}}>
               <div style={{position:'relative'}}>
-                <NotificationIcon unreadCount={notifications.filter(n => !n.isRead).length} onClick={() => setShowNotifications(v => !v)} />
                 <InboxIcon unreadCount={unreadInboxCount} onClick={() => setActiveSidebar('inbox')} />
-                <NotificationDropdown
-                  notifications={notifications}
-                  isOpen={showNotifications}
-                  onClose={() => setShowNotifications(false)}
-                  onMarkAsRead={id => setNotifications(n => n.map(msg => msg.id === id ? { ...msg, isRead: true } : msg))}
-                  onMarkAllAsRead={() => setNotifications(n => n.map(msg => ({ ...msg, isRead: true })))}
-                  onDelete={id => {
-                    setNotifications(n => n.filter(msg => msg.id !== id));
-                  }}
-                />
               </div>
-              <button className="dashboard-btn" onClick={() => setShowProfile(true)} style={{background:'#fff',color:'#010662',fontWeight:600,padding:'8px 18px',borderRadius:6,border:'none',boxShadow:'0 2px 8px rgba(1,6,98,0.08)',marginLeft:8}}>View Profile</button>
             </div>
           </div>
           <div style={{ fontSize: '1.2rem', fontWeight: 500, marginTop: 8, marginBottom: 4 }}>Welcome, {parentName}</div>

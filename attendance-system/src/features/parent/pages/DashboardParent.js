@@ -367,13 +367,11 @@ function DashboardParent() {
           <span className="icon" style={{marginRight:6}}>👤</span>
           <span className="username" style={{ color: '#fff', fontWeight: 600, marginRight: 10 }}>{parentName}</span>
           {/* Notification icon placeholder, replace with real component if available */}
-          <span style={{position:'relative',fontWeight:600,fontSize:'1.1rem',cursor:'pointer',marginRight:10}} title="Notifications">
-            <span role="img" aria-label="bell">🔔</span>
-          </span>
+  
           {/* Inbox icon and unread count - clickable */}
           <InboxIcon unreadCount={unreadInboxCount} onClick={() => setActiveSection('inbox')} />
-          <button className="dashboard-btn" style={{ background: '#fff', color: '#010662', fontWeight: 700, border: 'none', borderRadius: 6, padding: '8px 18px', cursor: 'pointer' }}>View Profile</button>
-          <button className="logout-button" style={{ background: '#ff4757', color: '#fff', fontWeight: 700, border: 'none', borderRadius: 6, padding: '8px 18px', cursor: 'pointer', marginRight: 10 }} onClick={handleLogout}>Logout</button>
+      
+          <button className="logout-button" style={{ background: '#ff4757', color: '#fff', fontWeight: 700, border: 'none', borderRadius: 6, padding: '8px 28px 8px 28px', cursor: 'pointer', marginRight: 4, minWidth: 100 }} onClick={handleLogout}>Logout</button>
         </div>
       </header>
       {/* Hamburger icon for mobile */}
@@ -732,17 +730,36 @@ function DashboardParent() {
             <p style={{ marginBottom: 24, fontSize: '1.1rem', color: '#2d3e50', fontWeight: 500 }}>Welcome, Parent! Here is a quick summary of your account.</p>
             <div style={{ display: 'flex', gap: 24, marginBottom: 32, flexWrap: 'wrap' }}>
               <div style={{ flex: '1 1 220px', background: gradientInfo, borderRadius: 14, padding: '24px 32px', boxShadow: `0 4px 24px ${primaryColor}22`, textAlign: 'center', color: '#fff', minWidth: 180, position: 'relative' }}>
-                <span style={{ position: 'absolute', top: 18, right: 18, fontSize: 28, opacity: 0.15 }}>👨‍👧‍👦</span>
+                <span style={{ position: 'absolute', top: 18, right: 18, fontSize: 28, opacity: 100 }}>👨‍👧‍👦</span>
                 <div style={{ fontSize: '2.2rem', fontWeight: 800, marginBottom: 8 }}>{linkedStudents.length}</div>
                 <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>Linked Students</div>
               </div>
               <div style={{ flex: '1 1 220px', background: gradientCard, borderRadius: 14, padding: '24px 32px', boxShadow: `0 4px 24px ${primaryColor}22`, textAlign: 'center', color: '#fff', minWidth: 180, position: 'relative' }}>
-                <span style={{ position: 'absolute', top: 18, right: 18, fontSize: 28, opacity: 0.15 }}>📋</span>
-                <div style={{ fontSize: '2.2rem', fontWeight: 800, marginBottom: 8 }}>{attendanceRecords.length}</div>
-                <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>Attendance Records</div>
+                <span style={{ position: 'absolute', top: 18, right: 18, fontSize: 28, opacity: 100 }}>📋</span>
+                {(() => {
+                  // Only show today's attendance records for linked students
+                  const today = new Date().toISOString().slice(0, 10);
+                  const todaysRecords = attendanceRecords.filter(rec => {
+                    // rec.date may be in YYYY-MM-DD or Date object
+                    let recDate = '';
+                    if (rec.date) {
+                      recDate = typeof rec.date === 'string' ? rec.date.slice(0, 10) : new Date(rec.date).toISOString().slice(0, 10);
+                    } else if (rec.timestamp) {
+                      recDate = new Date(rec.timestamp).toISOString().slice(0, 10);
+                    }
+                    return recDate === today;
+                  });
+                  return (
+                    <>
+                      <div style={{ fontSize: '2.2rem', fontWeight: 800, marginBottom: 8 }}>{todaysRecords.length}</div>
+                      <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>Today's Attendance Records</div>
+                      {/* Only show the total count, not the list */}
+                    </>
+                  );
+                })()}
               </div>
               <div style={{ flex: '1 1 220px', background: gradientWarn, borderRadius: 14, padding: '24px 32px', boxShadow: `0 4px 24px #ff475722`, textAlign: 'center', color: '#fff', minWidth: 180, position: 'relative' }}>
-                <span style={{ position: 'absolute', top: 18, right: 18, fontSize: 28, opacity: 0.15 }}>📢</span>
+                <span style={{ position: 'absolute', top: 18, right: 18, fontSize: 28, opacity: 100 }}>📢</span>
                 <div style={{ fontSize: '2.2rem', fontWeight: 800, marginBottom: 8 }}>{inboxMessages.filter(m => m.status === 'unread').length}</div>
                 <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>Unread Announcements</div>
               </div>
@@ -762,23 +779,6 @@ function DashboardParent() {
                   )
                 )}
               </ul>
-            </div>
-            <div style={{ marginBottom: 32, background: '#fffbea', borderRadius: 12, padding: '24px 32px', boxShadow: '0 2px 8px #f6ad5510' }}>
-              <h3 style={{ marginBottom: 16, fontWeight: 700, color: '#f6ad55' }}>Today's Attendance Summary</h3>
-              <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-                <div style={{ background: '#e6fffa', borderRadius: 8, padding: '16px 32px', textAlign: 'center', minWidth: 120 }}>
-                  <div style={{ color: '#38b2ac', fontWeight: 800, fontSize: '1.5rem' }}>1</div>
-                  <div style={{ color: '#38b2ac', fontWeight: 600 }}>Present</div>
-                </div>
-                <div style={{ background: '#fffbea', borderRadius: 8, padding: '16px 32px', textAlign: 'center', minWidth: 120 }}>
-                  <div style={{ color: '#f6ad55', fontWeight: 800, fontSize: '1.5rem' }}>1</div>
-                  <div style={{ color: '#f6ad55', fontWeight: 600 }}>Late</div>
-                </div>
-                <div style={{ background: '#ffeaea', borderRadius: 8, padding: '16px 32px', textAlign: 'center', minWidth: 120 }}>
-                  <div style={{ color: '#ff4757', fontWeight: 800, fontSize: '1.5rem' }}>0</div>
-                  <div style={{ color: '#ff4757', fontWeight: 600 }}>Absent</div>
-                </div>
-              </div>
             </div>
             <div style={{ background: gradientMain, borderRadius: 10, padding: '20px 32px', color: '#fff', fontWeight: 600, fontSize: '1.1rem', boxShadow: `0 2px 8px ${primaryColor}22`, textAlign: 'center' }}>
               <span>📅 Latest school update: Parent-Teacher meeting on <b>September 15, 2025</b>.</span>
@@ -935,33 +935,6 @@ function DashboardParent() {
               <label htmlFor="attendance-date" style={{fontWeight:600}}>Filter by Date:</label>
               <input id="attendance-date" type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} style={{padding:'6px 12px',borderRadius:6,border:'1px solid #b6d0f7',fontWeight:500}} />
               <button onClick={()=>setFilterDate('')} style={{padding:'6px 14px',borderRadius:6,background:'#eee',fontWeight:600,border:'none',cursor:'pointer'}}>Clear</button>
-              <button onClick={()=>{
-                // Manual refresh attendance
-                async function refreshAttendance() {
-                  try {
-                    const allAttendance = await fetchAttendance();
-                    const linkedIds = linkedStudents.map(s => String(s._id || s.studentId));
-                    console.log('[Parent Dashboard] [Manual Refresh] Linked student IDs:', linkedIds);
-                    console.log('[Parent Dashboard] [Manual Refresh] Raw attendance records:', allAttendance);
-                    const filtered = Array.isArray(allAttendance)
-                      ? allAttendance.filter(a => {
-                          const attId = String(a.studentId || a.student_id || a.student?._id || a.student);
-                          const match = linkedIds.includes(attId);
-                          if (!match) {
-                            console.log('[Parent Dashboard] [Manual Refresh] Attendance record not matched:', a, 'against IDs:', linkedIds);
-                          }
-                          return match;
-                        })
-                      : [];
-                    console.log('[Parent Dashboard] [Manual Refresh] Filtered attendance records:', filtered);
-                    setAttendanceRecords(filtered);
-                  } catch (err) {
-                    console.error('[Parent Dashboard] [Manual Refresh] Error fetching attendance:', err);
-                    setAttendanceRecords([]);
-                  }
-                }
-                refreshAttendance();
-              }} style={{padding:'6px 14px',borderRadius:6,background:primaryColor,color:'#fff',fontWeight:600,border:'none',cursor:'pointer'}}>Refresh</button>
             </div>
             <div style={{ boxShadow: '0 4px 24px rgba(33,150,243,0.10)', border: '1px solid #e2e8f0', background: '#fff', borderRadius: 18, padding: '0', marginBottom: 32, overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 600 }}>
