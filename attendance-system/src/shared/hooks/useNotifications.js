@@ -1,99 +1,125 @@
 import { useState, useEffect } from 'react';
+import axios from 'axios';
 
-export const useNotifications = (userRole) => {
+// This hook supports both localStorage (for admin/role-based) and API (for userId-based) notifications.
+// If userId is provided, it fetches from API. Otherwise, it falls back to localStorage using userRole.
+export function useNotifications({ userId, userRole }) {
   const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
 
-  // Load notifications from localStorage
+  // Fetch notifications from API if userId is provided, else from localStorage (role-based)
   useEffect(() => {
-    const loadNotifications = () => {
-      try {
-        // Get announcements (created by admin)
-        const announcements = JSON.parse(localStorage.getItem('announcements')) || [];
-        
-        // Get system notifications
-        const systemNotifications = JSON.parse(localStorage.getItem('systemNotifications')) || [];
-        
-        // Get role-specific notifications
-        const roleNotifications = JSON.parse(localStorage.getItem(`${userRole}Notifications`)) || [];
-        
-        // Combine all notifications
-        const allNotifications = [
-          // Admin announcements (visible to all)
-          ...announcements.map(announcement => ({
-            id: `announcement-${announcement.id}`,
-            type: 'announcement',
-            title: 'New Announcement',
-            message: announcement.title,
-            content: announcement.content,
-            timestamp: announcement.createdAt,
-            priority: announcement.priority || 'medium',
-            isRead: announcement.readBy?.includes(userRole) || false,
-            icon: '📢'
-          })),
-          
-          // System notifications
-          ...systemNotifications.map(notification => ({
-            id: `system-${notification.id}`,
-            type: 'system',
-            title: notification.title,
-            message: notification.message,
-            timestamp: notification.timestamp,
-            priority: notification.priority || 'medium',
-            isRead: notification.readBy?.includes(userRole) || false,
-            icon: '🔔'
-          })),
-          
-          // Role-specific notifications
-          ...roleNotifications.map(notification => ({
-            id: `${userRole}-${notification.id}`,
-            type: userRole,
-            title: notification.title,
-            message: notification.message,
-            timestamp: notification.timestamp,
-            priority: notification.priority || 'medium',
-            isRead: notification.isRead || false,
-            icon: getRoleIcon(userRole)
-          }))
-        ];
+    if (userId) {
+      // API-based notifications
+      axios
+        .get(`http://localhost:7000/api/notifications/${userId}`)
+        .then((res) => setNotifications(res.data))
+        .catch(() => setNotifications([]));
+    } else if (userRole) {
+      // LocalStorage-based notifications
+      const loadNotifications = () => {
+        try {
+          const announcements = JSON.parse(localStorage.getItem('announcements')) || [];
+          const systemNotifications = JSON.parse(localStorage.getItem('systemNotifications')) || [];
+          const roleNotifications = JSON.parse(localStorage.getItem(`${userRole}Notifications`)) || [];
+          const allNotifications = [
+            ...announcements.map((announcement) => ({
+              id: `announcement-${announcement.id}`,
+              type: 'announcement',
+              title: 'New Announcement',
+              message: announcement.title,
+              content: announcement.content,
+              timestamp: announcement.createdAt,
+              priority: announcement.priority || 'medium',
+              isRead: announcement.readBy?.includes(userRole) || false,
+              icon: '📢',
+            })),
+            ...systemNotifications.map((notification) => ({
+              id: `system-${notification.id}`,
+              type: 'system',
+              title: notification.title,
+              message: notification.message,
+              timestamp: notification.timestamp,
+              priority: notification.priority || 'medium',
+              isRead: notification.readBy?.includes(userRole) || false,
+              icon: '🔔',
+            })),
+            ...roleNotifications.map((notification) => ({
+              id: `${userRole}-${notification.id}`,
+              type: userRole,
+              title: notification.title,
+              message: notification.message,
+              timestamp: notification.timestamp,
+              priority: notification.priority || 'medium',
+              isRead: notification.isRead || false,
+              icon: getRoleIcon(userRole),
+            })),
+          ];
+          setNotifications(allNotifications);
+        } catch (err) {
+          setNotifications([]);
+        }
+      };
+      loadNotifications();
+    }
+  }, [userId, userRole]);
 
-        setNotifications(allNotifications);
-        setUnreadCount(allNotifications.filter(n => !n.isRead).length);
-      } catch (err) {
-        setNotifications([]);
-        setUnreadCount(0);
-      }
-    };
-    loadNotifications();
-  }, [userRole]);
+  // Unread count logic (API: .read, Local: .isRead)
+  const unreadCount = notifications.filter(
+    (n) => !(n.read ?? n.isRead)
+  ).length;
 
-  // Notification actions
-  const toggleNotifications = () => setIsOpen(!isOpen);
+  // Actions
+  const toggleNotifications = () => setIsOpen((v) => !v);
   const closeNotifications = () => setIsOpen(false);
+
   const markAsRead = (id) => {
-    setNotifications(notifications.map(n => n.id === id ? { ...n, isRead: true } : n));
-    setUnreadCount(notifications.filter(n => !n.isRead && n.id !== id).length);
+    setNotifications((prev) =>
+      prev.map((n) =>
+        (n._id || n.id) === id ? { ...n, read: true, isRead: true } : n
+      )
+    );
+    // API update if userId
+    if (userId) {
+      axios.patch(`http://localhost:7000/api/notifications/${id}/read`);
+    }
   };
+
   const markAllAsRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, isRead: true })));
-    setUnreadCount(0);
+    setNotifications((prev) =>
+      prev.map((n) => ({ ...n, read: true, isRead: true }))
+    );
+    if (userId) {
+      notifications.forEach((n) => {
+        if (!n.read) axios.patch(`http://localhost:7000/api/notifications/${n._id}/read`);
+      });
+    }
   };
+
   const deleteNotification = (id) => {
-    setNotifications(notifications.filter(n => n.id !== id));
-    setUnreadCount(notifications.filter(n => !n.isRead && n.id !== id).length);
+    setNotifications((prev) =>
+      prev.filter((n) => (n._id || n.id) !== id)
+    );
+    if (userId) {
+      axios.delete(`http://localhost:7000/api/notifications/${id}`);
+    }
   };
+
+  // Only for localStorage/role-based usage
   const addNotification = (notification) => {
-    setNotifications([notification, ...notifications]);
-    setUnreadCount(unreadCount + 1);
+    setNotifications((prev) => [notification, ...prev]);
   };
 
   function getRoleIcon(role) {
     switch (role) {
-      case 'admin': return '🛡️';
-      case 'teacher': return '👨‍🏫';
-      case 'parent': return '👨‍👩‍👧';
-      default: return '👤';
+      case 'admin':
+        return '🛡️';
+      case 'teacher':
+        return '👨‍🏫';
+      case 'parent':
+        return '👨‍👩‍👧';
+      default:
+        return '👤';
     }
   }
 
@@ -106,6 +132,6 @@ export const useNotifications = (userRole) => {
     markAsRead,
     markAllAsRead,
     deleteNotification,
-    addNotification
+    addNotification, // Only use for localStorage/role-based
   };
-};
+}

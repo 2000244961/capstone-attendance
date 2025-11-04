@@ -15,6 +15,7 @@ import { fetchInbox, deleteMessage, sendAdminMessageToMany } from '../api/messag
 import { fetchSentMessagesWithRole } from '../api/fetchSentMessagesWithRole';
 import { deleteUser as apiDeleteUser } from '../api/userApi';
 import { fetchTodayAttendanceSummaryAll, fetchAttendanceBySection } from '../api/attendanceApi';
+import axios from 'axios';
 
 
 
@@ -32,26 +33,19 @@ async function fetchUserName(userId) {
 
 
 function DashboardAdmin() {
+  const [adminMessageFile, setAdminMessageFile] = useState(null);
   const { setUser } = useUser();
   // Inbox view: 'received' or 'sent'
   const [inboxView, setInboxView] = useState('received');
   // Hamburger menu state for sidebar
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // Announcements state (persisted in localStorage)
-    const [announcements, setAnnouncements] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
     useEffect(() => {
-      async function fetchAnnouncements() {
-        try {
-          const res = await fetch('/api/announcement');
-          if (!res.ok) throw new Error('Failed to fetch announcements');
-          const data = await res.json();
-          setAnnouncements(data.announcements || []);
-        } catch (err) {
-          setAnnouncements([]);
-        }
-      }
-      fetchAnnouncements();
-    }, []);
+  axios.get('http://localhost:7000/api/announcements')
+    .then(res => setAnnouncements(res.data))
+    .catch(() => setAnnouncements([]));
+}, []);
   // Show/hide send message form
   const [showSendMessage, setShowSendMessage] = useState(false);
   // For specific user messaging
@@ -113,147 +107,151 @@ function DashboardAdmin() {
 
   // Handler for sending admin message (to be implemented)
   const handleSendAdminMessage = async (e) => {
-    e.preventDefault();
-    setAdminMessageError("");
-    setAdminMessageSuccess("");
-    setAdminMessageSending(true);
+  e.preventDefault();
+  setAdminMessageError("");
+  setAdminMessageSuccess("");
+  setAdminMessageSending(true);
+  try {
+    let currentUser = null;
     try {
-      let currentUser = null;
-      try {
-        currentUser = JSON.parse(localStorage.getItem('currentUser'));
-      } catch (err) {
-        currentUser = null;
-      }
-      if (!currentUser || !currentUser._id) {
-        setAdminMessageError('No admin user found. Please log out and log in again.');
+      currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    } catch (err) {
+      currentUser = null;
+    }
+    if (!currentUser || !currentUser._id) {
+      setAdminMessageError('No admin user found. Please log out and log in again.');
+      setAdminMessageSending(false);
+      return;
+    }
+    let fileUrl = null;
+    if (adminMessageFile) {
+      // Convert file to base64
+      fileUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(adminMessageFile);
+      });
+    }
+    if (adminMessageRecipientType === 'specific') {
+      // Inbox message to specific users
+      if (!adminMessageSpecificUsers.length || !adminMessageContent.trim()) {
+        setAdminMessageError("Please select at least one user and enter a message.");
         setAdminMessageSending(false);
         return;
       }
-      if (adminMessageRecipientType === 'specific') {
-        // Inbox message to specific users
-        if (!adminMessageSpecificUsers.length || !adminMessageContent.trim()) {
-          setAdminMessageError("Please select at least one user and enter a message.");
-          setAdminMessageSending(false);
-          return;
-        }
-        // Send message to each selected user
-        let failed = 0;
-        for (const userId of adminMessageSpecificUsers) {
-          try {
-            await sendAdminMessageToMany({
-              senderId: currentUser._id,
-              senderRole: 'admin',
-              recipientUserId: userId,
-              content: adminMessageContent
-            });
-            // Add to local inbox and persist in localStorage
-            const sentMsg = {
-              _id: `sent-${Date.now()}-${userId}`,
-              sender: { id: currentUser._id, name: currentUser.fullName || 'Admin' },
-              recipient: { id: userId },
-              content: adminMessageContent,
-              createdAt: new Date().toISOString(),
-              isRead: false,
-              fromSelf: true
-            };
-            setAdminInbox(prev => [sentMsg, ...prev]);
-            try {
-              const local = localStorage.getItem('adminSentMessages');
-              const arr = local ? JSON.parse(local) : [];
-              localStorage.setItem('adminSentMessages', JSON.stringify([sentMsg, ...arr]));
-            } catch {}
-          } catch (err) {
-            failed++;
-          }
-        }
-        if (failed > 0) {
-          setAdminMessageError(`Failed to send to ${failed} user(s).`);
-        } else {
-          setAdminMessageSuccess("Message sent to selected user(s).");
-          setAdminMessageContent("");
-          setAdminMessageSpecificUsers([]);
-        }
-      } else {
-        // Announcement to group(s)
-        if (!adminMessageRecipient || !adminMessageTitle.trim() || !adminMessageContent.trim()) {
-          setAdminMessageError("Please select audience, enter a title, and a message.");
-          setAdminMessageSending(false);
-          return;
-        }
-        // Send to selected group(s)
-        let recipientGroups = [];
-        if (adminMessageRecipient === 'both') recipientGroups = ['teachers', 'parents'];
-        else recipientGroups = [adminMessageRecipient];
-        let allResults = [];
-        for (const group of recipientGroups) {
-          const results = await sendAdminMessageToMany({
+      
+      let failed = 0;
+      for (const userId of adminMessageSpecificUsers) {
+        try {
+          await sendAdminMessageToMany({
             senderId: currentUser._id,
             senderRole: 'admin',
-            recipientGroup: group,
+            recipientUserId: userId,
             content: adminMessageContent,
-            subject: adminMessageTitle
+            fileUrl
           });
-          allResults = allResults.concat(results);
-        }
-        // Store the announcement in localStorage for the selected audience(s) and for admin
-        const announcementObj = {
-          title: adminMessageTitle,
-          content: adminMessageContent,
-          createdAt: new Date().toISOString(),
-          priority: 'medium',
-          audience: adminMessageRecipient,
-          postedBy: currentUser.fullName || 'Admin',
-          readBy: [],
-        };
-        try {
-          const res = await fetch('/api/announcement', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(announcementObj)
-          });
-          if (!res.ok) throw new Error('Failed to save announcement');
-          const saved = await res.json();
-          setAnnouncements(prev => [saved.announcement, ...prev]);
+          // Add to local inbox and persist in localStorage
+          const sentMsg = {
+            _id: `sent-${Date.now()}-${userId}`,
+            sender: { id: currentUser._id, name: currentUser.fullName || 'Admin' },
+            recipient: { id: userId },
+            content: adminMessageContent,
+            createdAt: new Date().toISOString(),
+            isRead: false,
+            fromSelf: true,
+            fileUrl // <-- attach file here
+          };
+          setAdminInbox(prev => [sentMsg, ...prev]);
+          try {
+            const local = localStorage.getItem('adminSentMessages');
+            const arr = local ? JSON.parse(local) : [];
+            localStorage.setItem('adminSentMessages', JSON.stringify([sentMsg, ...arr]));
+          } catch {}
         } catch (err) {
-          setAnnouncements(prev => [announcementObj, ...prev]);
-        }
-        const sentMsg = {
-          _id: `local-${Date.now()}`,
-          sender: { id: currentUser._id, name: currentUser.fullName || 'Admin' },
-          recipientGroup: adminMessageRecipient,
-          content: adminMessageContent,
-          subject: adminMessageTitle,
-          createdAt: new Date().toISOString(),
-          isRead: false,
-          fromSelf: true
-        };
-        setAdminInbox(prev => [sentMsg, ...prev]);
-        try {
-          const local = localStorage.getItem('adminSentMessages');
-          const arr = local ? JSON.parse(local) : [];
-          localStorage.setItem('adminSentMessages', JSON.stringify([sentMsg, ...arr]));
-        } catch {}
-        const failed = allResults.filter(r => r.error);
-        if (failed.length > 0) {
-          setAdminMessageError(`Failed to send to ${failed.length} user(s).`);
-        } else {
-          setAdminMessageSuccess("Announcement sent to selected audience.");
-          setAdminMessageContent("");
-          setAdminMessageTitle("");
-          setAdminMessageRecipient("");
+          failed++;
         }
       }
-    } catch (err) {
-      setAdminMessageError(err.message || 'Failed to send message.');
-    } finally {
-      setAdminMessageSending(false);
+      if (failed > 0) {
+        setAdminMessageError(`Failed to send to ${failed} user(s).`);
+      } else {
+        setAdminMessageSuccess("Message sent to selected user(s).");
+        setAdminMessageContent("");
+        setAdminMessageSpecificUsers([]);
+        setAdminMessageFile(null); // clear file after sending
+      }
+    } else {
+      // Announcement to group(s)
+      if (!adminMessageRecipient || !adminMessageTitle.trim() || !adminMessageContent.trim()) {
+        setAdminMessageError("Please select audience, enter a title, and a message.");
+        setAdminMessageSending(false);
+        return;
+      }
+      await axios.post('http://localhost:7000/api/announcements', {
+  title: adminMessageTitle,
+  content: adminMessageContent,
+  audience: adminMessageRecipient,
+  postedBy: currentUser.fullName || 'Admin',
+  fileUrl
+});
+// Fetch updated announcements from backend
+const res = await axios.get('http://localhost:7000/api/announcements');
+setAnnouncements(res.data);
+      let recipientGroups = [];
+      if (adminMessageRecipient === 'both') recipientGroups = ['teachers', 'parents'];
+      else recipientGroups = [adminMessageRecipient];
+      let allResults = [];
+      for (const group of recipientGroups) {
+        const results = await sendAdminMessageToMany({
+          senderId: currentUser._id,
+          senderRole: 'admin',
+          recipientGroup: group,
+          content: adminMessageContent,
+          subject: adminMessageTitle,
+          fileUrl
+        });
+        allResults = allResults.concat(results);
+      }
+      
+      const sentMsg = {
+        _id: `local-${Date.now()}`,
+        sender: { id: currentUser._id, name: currentUser.fullName || 'Admin' },
+        recipientGroup: adminMessageRecipient,
+        content: adminMessageContent,
+        subject: adminMessageTitle,
+        createdAt: new Date().toISOString(),
+        isRead: false,
+        fromSelf: true,
+        fileUrl // <-- attach file here
+      };
+      setAdminInbox(prev => [sentMsg, ...prev]);
+      try {
+        const local = localStorage.getItem('adminSentMessages');
+        const arr = local ? JSON.parse(local) : [];
+        localStorage.setItem('adminSentMessages', JSON.stringify([sentMsg, ...arr]));
+      } catch {}
+      const failed = allResults.filter(r => r.error);
+      if (failed.length > 0) {
+        setAdminMessageError(`Failed to send to ${failed.length} user(s).`);
+      } else {
+        setAdminMessageSuccess("Announcement sent to selected audience.");
+        setAdminMessageContent("");
+        setAdminMessageTitle("");
+        setAdminMessageRecipient("");
+        setAdminMessageFile(null); // clear file after sending
+      }
     }
-  };
+  } catch (err) {
+    setAdminMessageError(err.message || 'Failed to send message.');
+  } finally {
+    setAdminMessageSending(false);
+  }
+};
   // Section navigation
   const [activeSection, setActiveSection] = useState('overview');
 
   // Notifications
-  const notifications = useNotifications();
+  const notifications = useNotifications({ userRole: 'admin' });
 
   // User counts for dashboard overview
   const [userCounts, setUserCounts] = useState({ teacher: 0, parent: 0, student: 0 });
@@ -265,7 +263,9 @@ function DashboardAdmin() {
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [addUserRole, setAddUserRole] = useState('teacher');
   const [addUserForm, setAddUserForm] = useState({
-      fullName: '',
+  firstName: '',
+  lastName: '',
+  middleName: '',
       email: '',
       contact: '',
       idNumber: '',
@@ -337,6 +337,11 @@ function DashboardAdmin() {
     setAddUserLoading(true);
     try {
       // Basic validation
+      if (!addUserForm.firstName || !addUserForm.lastName || !addUserForm.middleName) {
+        setAddUserError('First name, last name, and middle name are required. If no middle name, select "N/A".');
+        setAddUserLoading(false);
+        return;
+      }
       if (addUserRole === 'teacher') {
         if (!addUserForm.username || !addUserForm.password || !addUserForm.confirmPassword) {
           setAddUserError('Username, password, and confirm password are required.');
@@ -358,7 +363,9 @@ function DashboardAdmin() {
       }
       // Build payload
       let payload = {
-        fullName: addUserForm.fullName,
+        firstName: addUserForm.firstName,
+        lastName: addUserForm.lastName,
+        middleName: addUserForm.middleName,
         email: addUserForm.email,
         contact: addUserForm.contact,
         type: addUserRole,
@@ -481,7 +488,7 @@ function DashboardAdmin() {
         else if (u.type === 'parent') counts.parent++;
       });
       // Fetch students from student API
-      const studentRes = await fetch('/api/student/list');
+      const studentRes = await fetch('/api/students/list');
       if (studentRes.ok) {
         const studentData = await studentRes.json();
         // studentData can be array or {students: []}
@@ -895,6 +902,7 @@ function DashboardAdmin() {
                             </div>
                           </div>
                         )}
+                    
                       </div>
                       <textarea
                         value={adminMessageContent}
@@ -904,6 +912,12 @@ function DashboardAdmin() {
                         style={{padding:'8px 12px',borderRadius:6,border:'1px solid #ccc',resize:'vertical'}}
                         required
                       />
+                      <input
+                         type="file"
+                         accept="image/*,.pdf,.doc,.docx"
+                          onChange={e => setAdminMessageFile(e.target.files[0])}
+                          style={{marginTop:8}}
+                       />
                       <div style={{display:'flex',gap:12,alignItems:'center'}}>
                         <button type="submit" className="dashboard-btn primary" disabled={adminMessageSending}>
                           {adminMessageSending ? 'Sending...' : 'Send'}
@@ -925,94 +939,96 @@ function DashboardAdmin() {
                   ) : (
                     <div style={{display:'flex',flexDirection:'column',gap:18}}>
                       {adminInbox
-                        .filter(msg => {
-                          const isSent = msg.fromSelf || (msg.sender && msg.sender.role === 'admin');
-                          return inboxView === 'sent' ? isSent : !isSent;
-                        })
-                        .map(msg => {
-                          const isSent = msg.fromSelf || (msg.sender && msg.sender.role === 'admin');
-                          const isExcuse = msg.type === 'excuse_letter';
-                          return (
-                            <div key={msg._id} style={{
-                              background:'#fff',
-                              borderRadius:14,
-                              padding:'20px 28px',
-                              boxShadow:'0 2px 12px rgba(33,150,243,0.08)',
-                              textAlign:'left',
-                              marginBottom:8,
-                              borderLeft: isSent ? '6px solid #3182ce' : '6px solid #38a169',
-                              position:'relative',
-                              opacity:msg._id && msg._id.toString().startsWith('sent-') ? 0.7 : 1
-                            }}>
-                              <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:6}}>
-                                <span style={{fontSize:22}}>{isExcuse ? '📄' : (isSent ? '📤' : '📥')}</span>
-                                <span style={{fontWeight:700,color:'#2b6cb0',fontSize:18}}>
-                                  {isExcuse ? 'Excuse Letter' : 'Message'}
-                                </span>
-                                <span style={{
-                                  marginLeft:10,
-                                  background:isSent ? '#e3f2fd' : '#e6fffa',
-                                  color:isSent ? '#3182ce' : '#38a169',
-                                  borderRadius:8,
-                                  fontSize:13,
-                                  fontWeight:600,
-                                  padding:'2px 10px',
-                                  letterSpacing:0.5
-                                }}>{isSent ? 'Sent' : 'Received'}</span>
-                              </div>
-                              <div style={{marginBottom:8,fontSize:15}}>
-                                <span style={{color:'#888'}}>{isSent ? 'To: ' : 'From: '}</span>
-                                <span style={{color:'#222',fontWeight:500}}>
-                                  {isSent
-                                    ? (() => {
-                                        if (msg.recipient?.role === 'specific' && msg.recipient?.id) {
-                                          const ids = msg.recipient.id.split(',');
-                                          const names = ids.map(id => {
-                                            const u = userList.find(u => u._id === id);
-                                            return u ? (u.fullName || u.username || u.email || id) : id;
-                                          });
-                                          return names.join(', ');
-                                        } else if (msg.recipient?.role === 'teachers') {
-                                          return 'All Teachers';
-                                        } else if (msg.recipient?.role === 'parents') {
-                                          return 'All Parents';
-                                        } else if (msg.recipient?.role === 'both') {
-                                          return 'All Teachers & Parents';
-                                        } else if (msg.recipient?.name) {
-                                          return msg.recipient.name;
-                                        } else if (msg.recipient?.id) {
-                                          const u = userList.find(u => u._id === msg.recipient.id);
-                                          return u ? (u.fullName || u.username || u.email || msg.recipient.id) : msg.recipient.id;
-                                        } else {
-                                          return 'Unknown';
-                                        }
-                                      })()
-                                    : (senderNames[msg.sender?.id] || msg.sender?.name || 'Unknown')}
-                                </span>
-                              </div>
-                              <div style={{fontSize:'1.08rem',color:'#333',marginBottom:10,whiteSpace:'pre-line'}}>{msg.content}
-                                {isExcuse && msg.fileUrl && (
-                                  <div style={{marginTop:8}}>
-                                    <a href={msg.fileUrl} download style={{color:'#3182ce',fontWeight:600,textDecoration:'underline',fontSize:15}}>
-                                      📎 Download Excuse Letter Attachment
-                                    </a>
-                                  </div>
-                                )}
-                              </div>
-                              <div style={{display:'flex',alignItems:'center',gap:18,marginTop:6}}>
-                                <span style={{fontSize:13,color:'#888'}}>
-                                  {isSent ? 'Sent' : 'Received'}: {new Date(msg.createdAt).toLocaleString()}
-                                </span>
-                                {msg.status && (
-                                  <span style={{fontSize:13,color:'#888'}}>
-                                    Status: <b style={{color:'#2b6cb0'}}>{msg.status}</b>
-                                  </span>
-                                )}
-                                <button onClick={()=>handleDeleteAdminMessage(msg._id)} style={{position:'absolute',top:18,right:18,background:'#fff',color:'#e53e3e',border:'1px solid #e53e3e',borderRadius:6,padding:'4px 12px',fontWeight:600,cursor:'pointer',fontSize:13}}>Delete</button>
-                              </div>
-                            </div>
-                          );
-                        })}
+  .filter(msg => {
+    const isSent = msg.fromSelf || (msg.sender && msg.sender.role === 'admin');
+    return inboxView === 'sent' ? isSent : !isSent;
+  })
+  .map(msg => {
+    const isSent = msg.fromSelf || (msg.sender && msg.sender.role === 'admin');
+    const isExcuse = msg.type === 'excuse_letter';
+    return (
+      <div key={msg._id} style={{
+        background:'#fff',
+        borderRadius:14,
+        padding:'20px 28px',
+        boxShadow:'0 2px 12px rgba(33,150,243,0.08)',
+        textAlign:'left',
+        marginBottom:8,
+        borderLeft: isSent ? '6px solid #3182ce' : '6px solid #38a169',
+        position:'relative',
+        opacity:msg._id && msg._id.toString().startsWith('sent-') ? 0.7 : 1
+      }}>
+        <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:6}}>
+          <span style={{fontSize:22}}>{isExcuse ? '📄' : (isSent ? '📤' : '📥')}</span>
+          <span style={{fontWeight:700,color:'#2b6cb0',fontSize:18}}>
+            {isExcuse ? 'Excuse Letter' : 'Message'}
+          </span>
+          <span style={{
+            marginLeft:10,
+            background:isSent ? '#e3f2fd' : '#e6fffa',
+            color:isSent ? '#3182ce' : '#38a169',
+            borderRadius:8,
+            fontSize:13,
+            fontWeight:600,
+            padding:'2px 10px',
+            letterSpacing:0.5
+          }}>{isSent ? 'Sent' : 'Received'}</span>
+        </div>
+        <div style={{marginBottom:8,fontSize:15}}>
+          <span style={{color:'#888'}}>{isSent ? 'To: ' : 'From: '}</span>
+          <span style={{color:'#222',fontWeight:500}}>
+            {isSent
+              ? (() => {
+                  if (msg.recipient?.role === 'specific' && msg.recipient?.id) {
+                    const ids = msg.recipient.id.split(',');
+                    const names = ids.map(id => {
+                      const u = userList.find(u => u._id === id);
+                      return u ? (u.fullName || u.username || u.email || id) : id;
+                    });
+                    return names.join(', ');
+                  } else if (msg.recipient?.role === 'teachers') {
+                    return 'All Teachers';
+                  } else if (msg.recipient?.role === 'parents') {
+                    return 'All Parents';
+                  } else if (msg.recipient?.role === 'both') {
+                    return 'All Teachers & Parents';
+                  } else if (msg.recipient?.name) {
+                    return msg.recipient.name;
+                  } else if (msg.recipient?.id) {
+                    const u = userList.find(u => u._id === msg.recipient.id);
+                    return u ? (u.fullName || u.username || u.email || msg.recipient.id) : msg.recipient.id;
+                  } else {
+                    return 'Unknown';
+                  }
+                })()
+              : (senderNames[msg.sender?.id] || msg.sender?.name || 'Unknown')}
+          </span>
+        </div>
+        <div style={{fontSize:'1.08rem',color:'#333',marginBottom:10,whiteSpace:'pre-line'}}>
+          {msg.content}
+          {/* Show file attachment for any message */}
+          {msg.fileUrl && (
+            <div style={{marginTop:8}}>
+              <a href={msg.fileUrl} download style={{color:'#3182ce',fontWeight:600,textDecoration:'underline',fontSize:15}}>
+                📎 Download Attachment
+              </a>
+            </div>
+          )}
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:18,marginTop:6}}>
+          <span style={{fontSize:13,color:'#888'}}>
+            {isSent ? 'Sent' : 'Received'}: {new Date(msg.createdAt).toLocaleString()}
+          </span>
+          {msg.status && (
+            <span style={{fontSize:13,color:'#888'}}>
+              Status: <b style={{color:'#2b6cb0'}}>{msg.status}</b>
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  })
+}
                     </div>
                   )}
                 </div>
@@ -1149,11 +1165,27 @@ function DashboardAdmin() {
                   <div className="modal-content redesigned-modal-content">
                     <h2 className="modal-title">Add {addUserRole === 'teacher' ? 'Teacher' : 'Parent'}</h2>
                     <form onSubmit={handleAddUserSubmit} className="add-user-form redesigned-add-user-form">
+                      {/* Row 1: Name fields */}
                       <div className="form-row">
                         <div className="form-group">
-                          <label>Full Name<span style={{color:'red'}}>*</span></label>
-                          <input name="fullName" type="text" value={addUserForm.fullName} onChange={handleAddUserFormChange} required />
+                          <label>First Name<span style={{color:'red'}}>*</span></label>
+                          <input name="firstName" type="text" value={addUserForm.firstName} onChange={handleAddUserFormChange} required />
                         </div>
+                        <div className="form-group">
+                          <label>Last Name<span style={{color:'red'}}>*</span></label>
+                          <input name="lastName" type="text" value={addUserForm.lastName} onChange={handleAddUserFormChange} required />
+                        </div>
+                        <div className="form-group">
+                          <label>Middle Name<span style={{color:'red'}}>*</span></label>
+                          <select name="middleName" value={addUserForm.middleName} onChange={handleAddUserFormChange} required>
+                            <option value="">N/A</option>
+                            <option value="N/A">N/A</option>
+                          </select>
+                          <input name="middleName" type="text" value={addUserForm.middleName !== 'N/A' ? addUserForm.middleName : ''} onChange={handleAddUserFormChange} placeholder="Enter middle name or select N/A" disabled={addUserForm.middleName === 'N/A'} />
+                        </div>
+                      </div>
+                      {/* Row 2: Contact fields */}
+                      <div className="form-row">
                         <div className="form-group">
                           <label>Email Address<span style={{color:'red'}}>*</span></label>
                           <input name="email" type="email" value={addUserForm.email} onChange={handleAddUserFormChange} required />
@@ -1162,29 +1194,30 @@ function DashboardAdmin() {
                           <label>Contact Number</label>
                           <input name="contact" type="text" value={addUserForm.contact} onChange={handleAddUserFormChange} />
                         </div>
+                        {addUserRole !== 'parent' && (
+                          <div className="form-group">
+                            <label>ID Number</label>
+                            <input name="idNumber" type="text" value={addUserForm.idNumber} onChange={handleAddUserFormChange} />
+                          </div>
+                        )}
+                      </div>
+                      {/* Row 3: Account fields */}
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Username<span style={{color:'red'}}>*</span></label>
+                          <input name="username" type="text" value={addUserForm.username} onChange={handleAddUserFormChange} required />
+                        </div>
+                        <div className="form-group">
+                          <label>Password<span style={{color:'red'}}>*</span></label>
+                          <input name="password" type="password" value={addUserForm.password} onChange={handleAddUserFormChange} required />
+                        </div>
+                        <div className="form-group">
+                          <label>Confirm Password<span style={{color:'red'}}>*</span></label>
+                          <input name="confirmPassword" type="password" value={addUserForm.confirmPassword} onChange={handleAddUserFormChange} required />
+                        </div>
                       </div>
                       {addUserRole === 'teacher' && (
                         <>
-                          <div className="form-row">
-                            <div className="form-group">
-                              <label>ID Number</label>
-                              <input name="idNumber" type="text" value={addUserForm.idNumber} onChange={handleAddUserFormChange} />
-                            </div>
-                            <div className="form-group">
-                              <label>Username<span style={{color:'red'}}>*</span></label>
-                              <input name="username" type="text" value={addUserForm.username} onChange={handleAddUserFormChange} required />
-                            </div>
-                          </div>
-                          <div className="form-row">
-                            <div className="form-group">
-                              <label>Password<span style={{color:'red'}}>*</span></label>
-                              <input name="password" type="password" value={addUserForm.password} onChange={handleAddUserFormChange} required />
-                            </div>
-                            <div className="form-group">
-                              <label>Confirm Password<span style={{color:'red'}}>*</span></label>
-                              <input name="confirmPassword" type="password" value={addUserForm.confirmPassword} onChange={handleAddUserFormChange} required />
-                            </div>
-                          </div>
                           <div className="form-row">
                             <div className="form-group">
                               <label>Assigned Section(s)</label>
@@ -1246,22 +1279,7 @@ function DashboardAdmin() {
                         </>
                       )}
                       {addUserRole === 'parent' && (
-                        <>
-                          <div className="form-row">
-                            <div className="form-group">
-                              <label>Username<span style={{color:'red'}}>*</span></label>
-                              <input name="username" type="text" value={addUserForm.username} onChange={handleAddUserFormChange} required />
-                            </div>
-                            <div className="form-group">
-                              <label>Password<span style={{color:'red'}}>*</span></label>
-                              <input name="password" type="password" value={addUserForm.password} onChange={handleAddUserFormChange} required />
-                            </div>
-                            <div className="form-group">
-                              <label>Confirm Password<span style={{color:'red'}}>*</span></label>
-                              <input name="confirmPassword" type="password" value={addUserForm.confirmPassword} onChange={handleAddUserFormChange} required />
-                            </div>
-                          </div>
-                        </>
+                        <></>
                       )}
                       {addUserRole === 'parent' && (
                         <div className="form-row">
@@ -1326,8 +1344,6 @@ function DashboardAdmin() {
                                   );
                                 })}
                             </div>
-                          </div>
-                          <div className="form-group">
                           </div>
                         </div>
                       )}
@@ -1403,8 +1419,6 @@ function DashboardAdmin() {
                         </div>
                         <div className="dashboard-user-actions">
                           <button className="dashboard-btn small" onClick={() => handleShowProfile(user)}>Profile</button>
-                          <button className="dashboard-btn small">Edit</button>
-                          <button className="dashboard-btn small danger" onClick={() => handleDeleteUser(user._id, user.username)}>Delete</button>
                         </div>
                       </div>
                     ))

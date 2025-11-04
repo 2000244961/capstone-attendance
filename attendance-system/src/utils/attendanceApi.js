@@ -1,8 +1,10 @@
 import axios from 'axios';
 
+// Make sure this matches your backend API endpoint and port!
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:7000/api/attendance';
 
 export const fetchAttendance = async () => {
+  // If your backend uses /api/attendance/list, change to `${API_URL}/list`
   const res = await axios.get(API_URL);
   return res.data;
 };

@@ -143,28 +143,67 @@ function DashboardParent() {
       setLinkedStudents([]);
     });
   }, [userId, JSON.stringify(linkedStudentIds)]);
-  // Track unread announcements from localStorage
-  useEffect(() => {
-    function updateUnreadCount() {
-      let teacherAnnouncements = [];
-      let readAnnouncements = [];
-      try {
-        teacherAnnouncements = JSON.parse(localStorage.getItem('teacherAnnouncements')) || [];
-        readAnnouncements = JSON.parse(localStorage.getItem('parentReadAnnouncements')) || [];
-      } catch {}
-      const unread = Array.isArray(teacherAnnouncements)
-        ? teacherAnnouncements.filter(a => !readAnnouncements.includes(a.id || a.timestamp)).length
-        : 0;
-      setAnnouncementUnreadCount(unread);
-    }
-    updateUnreadCount();
-    // Listen for localStorage changes (from mark as read)
-    window.addEventListener('storage', updateUnreadCount);
-    announcementUpdateRef.current = updateUnreadCount;
-    return () => window.removeEventListener('storage', updateUnreadCount);
-  }, []);
+  //latest update announcement
+  // ...existing code...
 
-  // Delete a message from inbox
+const [announcements, setAnnouncements] = useState([]);
+
+// Merge and normalize announcements, guarantee unique id for each
+useEffect(() => {
+  // Load admin and teacher announcements from localStorage
+  const adminAnnouncements = JSON.parse(localStorage.getItem('announcements')) || [];
+  const teacherAnnouncements = JSON.parse(localStorage.getItem('teacherAnnouncements')) || [];
+  // Filter admin announcements for parent audience
+  const filteredAdmin = adminAnnouncements.filter(a => {
+    if (!a.audience) return false;
+    if (typeof a.audience === 'string') {
+      return ['parent', 'parents', 'both', 'all'].includes(a.audience.toLowerCase());
+    }
+    if (Array.isArray(a.audience)) {
+      return a.audience.some(aud =>
+        ['parent', 'parents', 'both', 'all'].includes(String(aud).toLowerCase())
+      );
+    }
+    return false;
+  });
+  // Merge and ensure each announcement has a unique id
+  const merged = [...filteredAdmin, ...teacherAnnouncements].map(a => ({
+    ...a,
+    id: a.id || a._id || a.timestamp || a.createdAt || Math.random().toString(36).slice(2)
+  })).sort((a, b) => {
+    const dateA = new Date(a.createdAt || a.timestamp || a.date || 0).getTime();
+    const dateB = new Date(b.createdAt || b.timestamp || b.date || 0).getTime();
+    return dateB - dateA;
+  });
+  setAnnouncements(merged);
+}, []);
+
+// Correct unread announcement count logic
+useEffect(() => {
+  let readAnnouncements = [];
+  try {
+    readAnnouncements = JSON.parse(localStorage.getItem('parentReadAnnouncements')) || [];
+  } catch {}
+  const unread = Array.isArray(announcements)
+    ? announcements.filter(a => !readAnnouncements.includes(a.id)).length
+    : 0;
+  setAnnouncementUnreadCount(unread);
+}, [announcements]);
+
+// When marking as read, always use announcement.id
+function handleAnnouncementMarkAsRead(announcementId) {
+  let readAnnouncements = [];
+  try {
+    readAnnouncements = JSON.parse(localStorage.getItem('parentReadAnnouncements')) || [];
+  } catch {}
+  if (!readAnnouncements.includes(announcementId)) {
+    readAnnouncements.push(announcementId);
+    localStorage.setItem('parentReadAnnouncements', JSON.stringify(readAnnouncements));
+    setAnnouncementUnreadCount(count => Math.max(0, count - 1));
+  }
+}
+
+// ...existing code...
   const handleDeleteMessage = async (id) => {
     if (!window.confirm('Are you sure you want to delete this message?')) return;
     try {
@@ -235,6 +274,7 @@ function DashboardParent() {
         fileName: excuseForm.file?.name || '',
         excuseDate: excuseForm.date,
       };
+      
       setSentMessages(prev => {
         const updated = [newLetter, ...prev];
         try {
@@ -253,6 +293,18 @@ function DashboardParent() {
       setExcuseStatus('Failed to submit: ' + err.message);
     }
   };
+  // latest update
+  function handleAnnouncementMarkAsRead(announcementId) {
+  let readAnnouncements = [];
+  try {
+    readAnnouncements = JSON.parse(localStorage.getItem('parentReadAnnouncements')) || [];
+  } catch {}
+  if (!readAnnouncements.includes(announcementId)) {
+    readAnnouncements.push(announcementId);
+    localStorage.setItem('parentReadAnnouncements', JSON.stringify(readAnnouncements));
+    setAnnouncementUnreadCount(count => Math.max(0, count - 1));
+  }
+}
 
   // Fetch inbox and sent messages
   const fetchInboxMessages = async () => {
@@ -760,9 +812,9 @@ function DashboardParent() {
               </div>
               <div style={{ flex: '1 1 220px', background: gradientWarn, borderRadius: 14, padding: '24px 32px', boxShadow: `0 4px 24px #ff475722`, textAlign: 'center', color: '#fff', minWidth: 180, position: 'relative' }}>
                 <span style={{ position: 'absolute', top: 18, right: 18, fontSize: 28, opacity: 100 }}>📢</span>
-                <div style={{ fontSize: '2.2rem', fontWeight: 800, marginBottom: 8 }}>{inboxMessages.filter(m => m.status === 'unread').length}</div>
+                <div style={{ fontSize: '2.2rem', fontWeight: 800, marginBottom: 8 }}>{announcementUnreadCount}</div>
                 <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>Unread Announcements</div>
-              </div>
+                </div>
             </div>
             <div style={{ marginBottom: 32, background: '#f7fafc', borderRadius: 12, padding: '24px 32px', boxShadow: `0 2px 8px ${primaryColor}22` }}>
               <h3 style={{ marginBottom: 16, fontWeight: 700, color: primaryColor }}>Recently Linked Students</h3>
@@ -991,66 +1043,89 @@ function DashboardParent() {
           </div>
         )}
         {activeSection === 'announcements' && (
-          <div style={{ padding: '32px', maxWidth: 900, margin: '0 auto' }}>
-            <h2 style={{ marginBottom: 8, fontWeight: 800, color: '#2196F3', letterSpacing: 1 }}>Announcements</h2>
-            <p style={{ marginBottom: 24, fontSize: '1.1rem', color: '#2d3e50', fontWeight: 500 }}>Stay updated with the latest school news and announcements.</p>
-            {/* Unread count */}
-            {(() => {
-              let teacherAnnouncements = [];
-              let readAnnouncements = [];
-              try {
-                teacherAnnouncements = JSON.parse(localStorage.getItem('teacherAnnouncements')) || [];
-                readAnnouncements = JSON.parse(localStorage.getItem('parentReadAnnouncements')) || [];
-              } catch {}
-              const unreadCount = Array.isArray(teacherAnnouncements)
-                ? teacherAnnouncements.filter(a => !readAnnouncements.includes(a.id || a.timestamp)).length
-                : 0;
-              return (
-                <div style={{ marginBottom: 18, fontWeight: 700, color: '#f6ad55', fontSize: '1.08rem' }}>
-                  Unread Announcements: {unreadCount}
-                </div>
-              );
-            })()}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-              {/* Dynamic teacher announcements from localStorage with mark as read */}
-              {(() => {
-                let teacherAnnouncements = [];
-                let readAnnouncements = [];
-                try {
-                  teacherAnnouncements = JSON.parse(localStorage.getItem('teacherAnnouncements')) || [];
-                  readAnnouncements = JSON.parse(localStorage.getItem('parentReadAnnouncements')) || [];
-                } catch {}
-                if (!Array.isArray(teacherAnnouncements) || teacherAnnouncements.length === 0) {
-                  return <div style={{ color: '#888', fontWeight: 600 }}>No teacher announcements yet.</div>;
-                }
-                function markAsRead(id) {
-                  let read = Array.isArray(readAnnouncements) ? [...readAnnouncements] : [];
-                  if (!read.includes(id)) {
-                    read.push(id);
-                    localStorage.setItem('parentReadAnnouncements', JSON.stringify(read));
-                    setTimeout(() => {
-                      if (announcementUpdateRef.current) announcementUpdateRef.current();
-                    }, 50);
-                  }
-                }
-                return teacherAnnouncements.map(announcement => {
-                  const isRead = readAnnouncements.includes(announcement.id || announcement.timestamp);
-                  return (
-                    <div key={announcement.id || announcement.timestamp} style={{ background: isRead ? 'linear-gradient(135deg, #e6fffa 0%, #f7fafc 100%)' : 'linear-gradient(135deg, #2196F3 0%, #38b2ac 100%)', borderRadius: 14, padding: '24px 32px', boxShadow: '0 4px 24px rgba(33,150,243,0.10)', color: isRead ? '#333' : '#fff', position: 'relative' }}>
-                      <div style={{ fontWeight: 700, fontSize: '1.2rem', marginBottom: 8 }}>{announcement.title}</div>
-                      <div style={{ fontWeight: 500, fontSize: '1rem', marginBottom: 12 }}>{new Date(announcement.timestamp).toLocaleString()}</div>
-                      <div style={{ fontWeight: 400, fontSize: '1rem', marginBottom: 12 }}>{announcement.message}</div>
-                      <span style={{ background: '#fffbea', color: '#f6ad55', borderRadius: 8, padding: '6px 16px', fontWeight: 600, fontSize: '0.95rem', position: 'absolute', top: 24, right: 32 }}>From: {announcement.sender || 'Teacher'}</span>
-                      {!isRead && (
-                        <button onClick={() => markAsRead(announcement.id || announcement.timestamp)} style={{ marginTop: 16, background: '#fffbea', color: '#f6ad55', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 700, cursor: 'pointer', fontSize: '1rem' }}>Mark as Read</button>
-                      )}
-                    </div>
-                  );
-                });
-              })()}
+  <div style={{ padding: '32px', maxWidth: 900, margin: '0 auto' }}>
+    <h2 style={{ marginBottom: 8, fontWeight: 800, color: '#2196F3', letterSpacing: 1 }}>Announcements</h2>
+    <p style={{ marginBottom: 24, fontSize: '1.1rem', color: '#2d3e50', fontWeight: 500 }}>Stay updated with the latest school news and announcements.</p>
+    <div style={{ marginBottom: 18, fontWeight: 700, color: '#f6ad55', fontSize: '1.08rem' }}>
+      Unread Announcements: {announcementUnreadCount}
+    </div>
+    
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {announcements.length === 0 ? (
+        <div style={{ color: '#888', fontWeight: 600 }}>No announcements yet.</div>
+      ) : (
+        announcements.map(announcement => {
+          let readAnnouncements = [];
+          try {
+            readAnnouncements = JSON.parse(localStorage.getItem('parentReadAnnouncements')) || [];
+          } catch {}
+          const isRead = readAnnouncements.includes(announcement.id || announcement.timestamp);
+
+          return (
+            <div
+              key={announcement.id || announcement.timestamp}
+              style={{
+                background: isRead
+                  ? 'linear-gradient(135deg, #e6fffa 0%, #f7fafc 100%)'
+                  : 'linear-gradient(135deg, #2196F3 0%, #38b2ac 100%)',
+                borderRadius: 14,
+                padding: '24px 32px',
+                boxShadow: '0 4px 24px rgba(33,150,243,0.10)',
+                color: isRead ? '#333' : '#fff',
+                position: 'relative'
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: '1.2rem', marginBottom: 8 }}>
+                {announcement.title || announcement.message}
+              </div>
+              <div style={{ fontWeight: 500, fontSize: '1rem', marginBottom: 12 }}>
+                {announcement.createdAt
+                  ? new Date(announcement.createdAt).toLocaleString()
+                  : (announcement.timestamp
+                      ? new Date(announcement.timestamp).toLocaleString()
+                      : (announcement.date || ''))}
+              </div>
+              <div style={{ fontWeight: 400, fontSize: '1rem', marginBottom: 12 }}>
+                {announcement.content || announcement.message}
+              </div>
+              <span style={{
+                background: '#fffbea',
+                color: '#f6ad55',
+                borderRadius: 8,
+                padding: '6px 16px',
+                fontWeight: 600,
+                fontSize: '0.95rem',
+                position: 'absolute',
+                top: 24,
+                right: 32
+              }}>
+                From: {announcement.postedBy || announcement.sender || 'Admin'}
+              </span>
+              {!isRead && (
+                <button
+                  onClick={() => handleAnnouncementMarkAsRead(announcement.id || announcement.timestamp)}
+                  style={{
+                    marginTop: 16,
+                    background: '#fffbea',
+                    color: '#f6ad55',
+                    border: 'none',
+                    borderRadius: 8,
+                    padding: '8px 18px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '1rem'
+                  }}
+                >
+                  Mark as Read
+                </button>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })
+      )}
+    </div>
+  </div>
+)}
       </main>
       {/* Responsive styles for hamburger/sidebar */}
       <style>{`

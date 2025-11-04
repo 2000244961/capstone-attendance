@@ -163,6 +163,10 @@ const ManageStudent = ({ refreshDashboard }) => {
         alert('Please fill in all required fields.');
         return false;
       }
+      if (/\d/.test(formData.fullName)) {
+    alert('Full Name should not contain numbers.');
+    return false;
+  }
       return true;
     }, [formData]);
 
@@ -536,9 +540,35 @@ const ManageStudent = ({ refreshDashboard }) => {
                 >
                   📷 Take Photo
                 </button>
-              </div>
-            )}
-
+                <label style={{
+      backgroundColor: '#007bff',
+      color: 'white',
+      padding: '10px 20px',
+      border: 'none',
+      borderRadius: '5px',
+      cursor: 'pointer',
+      fontSize: '14px'
+    }}>
+      📁 Upload Photo
+      <input
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={async (e) => {
+          const file = e.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              setCapturedPhoto(reader.result);
+              setFormData(prev => ({ ...prev, photo: reader.result }));
+            };
+            reader.readAsDataURL(file);
+          }
+        }}
+      />
+    </label>
+  </div>
+)}
             {showCamera && (
               <div className="camera-container" style={{marginTop: '10px'}}>
                 <Webcam

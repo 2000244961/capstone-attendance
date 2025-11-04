@@ -11,16 +11,23 @@ const NotificationDropdown = ({
 }) => {
   if (!isOpen) return null;
 
-  const formatTimeAgo = (timestamp) => {
+  // Helper: prefer timestamp, fallback to createdAt, fallback to null
+  const getDateString = (notification) => notification.timestamp || notification.createdAt || null;
+
+  // Format "time ago" or fallback to full date if invalid
+  const formatTimeAgo = (notification) => {
+    const dateString = getDateString(notification);
+    if (!dateString) return 'No date';
     const now = new Date();
-    const time = new Date(timestamp);
+    const time = new Date(dateString);
+    if (isNaN(time.getTime())) return 'No date';
     const diffInSeconds = Math.floor((now - time) / 1000);
 
     if (diffInSeconds < 60) return 'Just now';
     if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
     if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
     if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
-    return time.toLocaleDateString();
+    return time.toLocaleString();
   };
 
   const getPriorityColor = (priority) => {
@@ -44,7 +51,7 @@ const NotificationDropdown = ({
         <div className="notification-header">
           <h3>🔔 Notifications</h3>
           <div className="notification-actions">
-            {notifications.some(n => !n.isRead) && (
+            {notifications.some(n => !(n.read ?? n.isRead)) && (
               <button
                 className="mark-all-read-btn"
                 onClick={onMarkAllAsRead}
@@ -72,14 +79,16 @@ const NotificationDropdown = ({
           ) : (
             notifications.map((notification) => (
               <div
-                key={notification.id}
-                className={`notification-item ${!notification.isRead ? 'unread' : ''}`}
+                key={notification._id || notification.id}
+                className={`notification-item ${!(notification.read ?? notification.isRead) ? 'unread' : ''}`}
               >
                 <div className="notification-content">
                   <div className="notification-header-row">
                     <span className="notification-icon">{notification.icon}</span>
                     <div className="notification-title-row">
-                      <span className="notification-title">{notification.title}</span>
+                      <span className="notification-title">
+                        {notification.title || notification.message || notification.content}
+                      </span>
                       <div
                         className="priority-indicator"
                         style={{ backgroundColor: getPriorityColor(notification.priority) }}
@@ -87,26 +96,21 @@ const NotificationDropdown = ({
                       />
                     </div>
                     <span className="notification-time">
-                      {formatTimeAgo(notification.timestamp)}
+                      {formatTimeAgo(notification)}
                     </span>
                   </div>
-                  
                   <div className="notification-message">
-                    {notification.message}
+                    {/* Only show if message/content is different from title */}
+                    {(notification.message && notification.message !== notification.title) && notification.message}
+                    {(notification.content && notification.content !== notification.title && notification.content !== notification.message) && notification.content}
                   </div>
-                  
-                  {notification.content && (
-                    <div className="notification-full-content">
-                      {notification.content}
-                    </div>
-                  )}
                 </div>
 
                 <div className="notification-actions">
-                  {!notification.isRead && (
+                  {!(notification.read ?? notification.isRead) && (
                     <button
                       className="mark-read-btn"
-                      onClick={() => onMarkAsRead(notification.id)}
+                      onClick={() => onMarkAsRead(notification._id || notification.id)}
                       title="Mark as read"
                     >
                       ✓
@@ -114,7 +118,7 @@ const NotificationDropdown = ({
                   )}
                   <button
                     className="delete-btn"
-                    onClick={() => onDelete(notification.id)}
+                    onClick={() => onDelete(notification._id || notification.id)}
                     title="Delete"
                   >
                     🗑️

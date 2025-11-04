@@ -27,6 +27,24 @@ function DashboardParent() {
   // Example parent state
   const [linkedStudents, setLinkedStudents] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
+  useEffect(() => {
+    // Load announcements from localStorage
+    const stored = JSON.parse(localStorage.getItem('announcements')) || [];
+    // Filter for parent audience or all
+    const filtered = stored.filter(a => {
+    if (!a.audience) return false;
+    if (typeof a.audience === 'string') {
+      return ['parent', 'parents', 'both', 'all'].includes(a.audience.toLowerCase());
+    }
+    if (Array.isArray(a.audience)) {
+      return a.audience.some(aud =>
+        ['parent', 'parents', 'both', 'all'].includes(String(aud).toLowerCase())
+      );
+    }
+    return false;
+  });
+  setAnnouncements(filtered);
+  }, []);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
 
   useEffect(() => {
@@ -520,12 +538,59 @@ function DashboardParent() {
                     <div style={{padding:'16px'}}>No announcements found.</div>
                   ) : (
                     announcements.map(announcement => (
-                      <div key={announcement.id} className="announcement-card" style={{minWidth:280,maxWidth:320,background:'#fffbea',borderRadius:10,padding:'18px 16px',boxShadow:'0 2px 8px rgba(246,173,85,0.10)'}}>
-                        <div className="announcement-title" style={{fontWeight:700,fontSize:18,color:'#f6ad55',marginBottom:6}}>{announcement.title}</div>
-                        <div className="announcement-date" style={{fontSize:13,color:'#555',marginBottom:8}}>{announcement.date}</div>
-                        <div className="announcement-content" style={{fontSize:15}}>{announcement.content}</div>
-                        {announcement.details && <div style={{marginTop:8,fontSize:14,color:'#444'}}>{announcement.details}</div>}
-                      </div>
+                      <div key={announcement.id}
+  className="announcement-card"
+  style={{
+    minWidth: 280,
+    maxWidth: 320,
+    background: '#fffbea',
+    borderRadius: 10,
+    padding: '18px 16px',
+    boxShadow: '0 2px 8px rgba(246,173,85,0.10)'
+  }}
+>
+  <div
+    className="announcement-title"
+    style={{
+      fontWeight: 700,
+      fontSize: 18,
+      color: '#f6ad55',
+      marginBottom: 6
+    }}
+  >
+    {announcement.title}
+  </div>
+  <div
+    className="announcement-date"
+    style={{
+      fontSize: 13,
+      color: '#555',
+      marginBottom: 8
+    }}
+  >
+    {/* Use createdAt if available, fallback to date */}
+    {announcement.createdAt
+      ? new Date(announcement.createdAt).toLocaleString()
+      : (announcement.date || '')}
+  </div>
+  <div
+    className="announcement-content"
+    style={{ fontSize: 15 }}
+  >
+    {announcement.content}
+  </div>
+  {announcement.details && (
+    <div
+      style={{
+        marginTop: 8,
+        fontSize: 14,
+        color: '#444'
+      }}
+    >
+      {announcement.details}
+    </div>
+  )}
+</div>
                     ))
                   )}
                 </div>

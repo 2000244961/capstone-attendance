@@ -146,7 +146,6 @@ function ManageSubjectSection() {
                         <td>{item.subject || '-'}</td>
                         <td>
                           <button className="edit-btn">Edit</button>
-                          <button className="delete-btn" onClick={() => handleDelete(item._id)} style={{marginLeft:8}}>Delete</button>
                         </td>
                       </tr>
                     ))

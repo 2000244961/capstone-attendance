@@ -1,35 +1,25 @@
-// Dummy studentApi for build
-// Real studentApi for backend connection
-export async function fetchStudents() {
-	const res = await fetch('/api/student/list');
-	if (!res.ok) throw new Error('Failed to fetch students');
-	return await res.json();
-}
+import axios from 'axios';
 
-export async function addStudent(student) {
-	const res = await fetch('/api/student/add', {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify(student)
-	});
-	if (!res.ok) throw new Error('Failed to add student');
-	return await res.json();
-}
+// Fetch all students from backend
+export const fetchStudents = async () => {
+  const res = await axios.get('http://localhost:7000/api/students');
+  return res.data;
+};
 
-export async function updateStudent(student) {
-	const res = await fetch(`/api/student/update/${student._id}`, {
-		method: 'PUT',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify(student)
-	});
-	if (!res.ok) throw new Error('Failed to update student');
-	return await res.json();
-}
+// Add a new student
+export const addStudent = async (student) => {
+  const res = await axios.post('http://localhost:7000/api/students/add', student);
+  return res.data;
+};
 
-export async function deleteStudent(id) {
-	const res = await fetch(`/api/student/delete/${id}`, {
-		method: 'DELETE'
-	});
-	if (!res.ok) throw new Error('Failed to delete student');
-	return await res.json();
-}
+// Update a student
+export const updateStudent = async (student) => {
+  const res = await axios.put(`http://localhost:7000/api/students/update/${student._id}`, student);
+  return res.data;
+};
+
+// Delete a student
+export const deleteStudent = async (id) => {
+  const res = await axios.delete(`http://localhost:7000/api/students/delete/${id}`);
+  return res.data;
+};

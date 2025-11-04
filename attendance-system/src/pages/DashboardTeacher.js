@@ -15,6 +15,8 @@ import { deleteMessage } from '../api/messageApi';
 import { fetchAllParents, fetchAllTeachers } from '../api/userApi';
 import { fetchStudents } from '../api/studentApi';
 import { fetchTodayAttendanceSummary } from '../api/attendanceApi';
+import axios from 'axios';
+
 
 
 // Today's Attendance Summary component for dashboard overview
@@ -61,93 +63,147 @@ async function fetchUserName(userId) {
 	}
 }
 
+
 function DashboardTeacher() {
-	// Hamburger menu state
-	const [sidebarOpen, setSidebarOpen] = useState(false);
-	// Show/hide send message form
-	const [showSendMessage, setShowSendMessage] = useState(false);
-	// Inbox view: 'received' or 'sent'
-	const [inboxView, setInboxView] = useState('received');
-	// Get current user from React context
-	const { user: currentUser } = useUser();
+    const [teacherMessageFile, setTeacherMessageFile] = useState(null);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [showSendMessage, setShowSendMessage] = useState(false);
+    const [inboxView, setInboxView] = useState('received');
+    const { user: currentUser } = useUser();
+	const {
+  notifications: notificationList,
+  unreadCount,
+  isOpen,
+  toggleNotifications,
+  closeNotifications,
+  markAsRead,
+  markAllAsRead,
+  deleteNotification
+} = useNotifications({ userId: currentUser._id, userRole: currentUser.type });
+console.log('notificationList', notificationList);
+    const [announcements, setAnnouncements] = useState([]);
 
-	// Inbox messages state (backend-driven, not localStorage)
-	const [inboxMessages, setInboxMessages] = useState([]);
+	const unreadCountManual = notificationList.filter(n => !(n.read ?? n.isRead)).length;
+	
+	
 
-	// Track unread inbox messages for teacher (computed from inboxMessages)
-	const unreadInboxCount = inboxMessages.filter(msg => msg.status !== 'read' && (!msg.sender || msg.sender.id !== currentUser._id)).length;
-
-	// Removed unreadInboxCount state and useEffect. Now computed from inboxMessages.
-		// ...existing code...
-			// ...existing code...
-
-		// ...existing code...
-	// All state declarations first
-	const [profileData, setProfileData] = useState(null);
-	const [profileLoading, setProfileLoading] = useState(false);
-	const [profileError, setProfileError] = useState(null);
-	const [studentsInSections, setStudentsInSections] = useState(0);
-	const [subjectsHandled, setSubjectsHandled] = useState(0);
-	// Announcement logic
-	const [announcementSending, setAnnouncementSending] = useState(false);
-	const handleSendAnnouncement = ({ title, message }) => {
-		setAnnouncementSending(true);
-		// Get existing announcements from localStorage
-		const existing = JSON.parse(localStorage.getItem('teacherAnnouncements') || '[]');
-		const newAnnouncement = {
-			id: Date.now(),
-			title,
-			message,
-			sender: profileData?.fullName || currentUser?.fullName || 'Teacher',
-			role: 'parents',
-			timestamp: new Date().toISOString(),
-		};
-		localStorage.setItem('teacherAnnouncements', JSON.stringify([newAnnouncement, ...existing]));
-		setAnnouncementSending(false);
-	};
-// Fetch and count unique subjects handled by teacher (use only subjects if available, else fallback)
 useEffect(() => {
-	if (!profileData) {
-		setSubjectsHandled(0);
-		return;
-	}
-	if (Array.isArray(profileData.subjects) && profileData.subjects.length > 0) {
-		// Only count unique subject names from subjects array
-		const uniqueSubjects = new Set(profileData.subjects.map(s => s.subjectName || s.name).filter(Boolean));
-		setSubjectsHandled(uniqueSubjects.size);
-		return;
-	}
-	// Fallback: try to get from assignedSections only if subjects is empty
-	if (Array.isArray(profileData.assignedSections) && profileData.assignedSections.length > 0) {
-		const allSubjects = profileData.assignedSections.map(s => s.subjectName || s.name).filter(Boolean);
-		const uniqueSubjects = new Set(allSubjects);
-		setSubjectsHandled(uniqueSubjects.size);
-		return;
-	}
-	setSubjectsHandled(0);
-}, [profileData]);
+    // Fetch announcements from backend
+    const fetchAnnouncements = async () => {
+        try {
+            const res = await axios.get('http://localhost:7000/api/announcements');
+            // Filter announcements for teacher audience (same logic as before)
+            const filtered = (res.data || []).filter(a =>
+                a.audience === 'teacher' ||
+                a.audience === 'both' ||
+                a.audience === 'teachers' ||
+                a.audience === 'all' ||
+                (Array.isArray(a.audience) && (
+                    a.audience.includes('teacher') ||
+                    a.audience.includes('teachers') ||
+                    a.audience.includes('both') ||
+                    a.audience.includes('all')
+                ))
+            );
+            setAnnouncements(filtered);
+        } catch (err) {
+            setAnnouncements([]); // fallback to empty if error
+        }
+    };
+    fetchAnnouncements();
+}, []);
+
+    const [inboxMessages, setInboxMessages] = useState([]);
+    const unreadInboxCount = inboxMessages.filter(
+        msg => msg.status !== 'read' && (!msg.sender || msg.sender.id !== currentUser._id)
+    ).length;
+
+    const [profileData, setProfileData] = useState(null);
+    const [profileLoading, setProfileLoading] = useState(false);
+    const [profileError, setProfileError] = useState(null);
+    const [studentsInSections, setStudentsInSections] = useState(0);
+    const [subjectsHandled, setSubjectsHandled] = useState(0);
+    const [announcementSending, setAnnouncementSending] = useState(false);
+
+    const handleSendAnnouncement = ({ title, message }) => {
+        setAnnouncementSending(true);
+        const existing = JSON.parse(localStorage.getItem('teacherAnnouncements') || '[]');
+        const newAnnouncement = {
+            id: Date.now(),
+            title,
+            message,
+            sender: profileData?.fullName || currentUser?.fullName || 'Teacher',
+            role: 'parents',
+            timestamp: new Date().toISOString(),
+        };
+        localStorage.setItem('teacherAnnouncements', JSON.stringify([newAnnouncement, ...existing]));
+        setAnnouncementSending(false);
+    };
+
+    // Fetch and count unique subjects handled by teacher
+    useEffect(() => {
+        if (!profileData) {
+            setSubjectsHandled(0);
+            return;
+        }
+        if (Array.isArray(profileData.subjects) && profileData.subjects.length > 0) {
+            const uniqueSubjects = new Set(profileData.subjects.map(s => s.subjectName || s.name).filter(Boolean));
+            setSubjectsHandled(uniqueSubjects.size);
+            return;
+        }
+        if (Array.isArray(profileData.assignedSections) && profileData.assignedSections.length > 0) {
+            const allSubjects = profileData.assignedSections.map(s => s.subjectName || s.name).filter(Boolean);
+            const uniqueSubjects = new Set(allSubjects);
+            setSubjectsHandled(uniqueSubjects.size);
+            return;
+        }
+        setSubjectsHandled(0);
+    }, [profileData]);
 		// Fetch and count students in teacher's assigned sections
-		useEffect(() => {
-			async function fetchAndCountStudents() {
-				if (!profileData || !Array.isArray(profileData.assignedSections) || profileData.assignedSections.length === 0) {
-					setStudentsInSections(0);
-					return;
-				}
-				try {
-					const allStudents = await fetchStudents();
-					// Normalize students array
-					const studentsArr = Array.isArray(allStudents) ? allStudents : (allStudents.students || allStudents.list || []);
-					// Get section names or IDs assigned to teacher
-					const assignedSectionNames = profileData.assignedSections.map(s => s.sectionName || s.name || s._id || s);
-					// Count students whose section matches any assigned section
-					const count = studentsArr.filter(stu => assignedSectionNames.includes(stu.section || stu.sectionName || stu.assignedSection || stu.section_id)).length;
-					setStudentsInSections(count);
-				} catch {
-					setStudentsInSections(0);
-				}
-			}
-			fetchAndCountStudents();
-		}, [profileData]);
+		
+    useEffect(() => {
+    async function fetchAndCountStudents() {
+        // Debug: log profileData and assignedSections
+        console.log('profileData:', profileData);
+        if (
+            !profileData ||
+            !Array.isArray(profileData.assignedSections) ||
+            profileData.assignedSections.length === 0
+        ) {
+            console.log('profileData is missing or assignedSections is empty!');
+            setStudentsInSections(0);
+            return;
+        }
+        try {
+            const allStudents = await fetchStudents();
+            const studentsArr = Array.isArray(allStudents)
+                ? allStudents
+                : (allStudents.students || allStudents.list || []);
+            // Debug: log all students
+            console.log('studentsArr:', studentsArr);
+
+            const assignedSectionNames = profileData.assignedSections.map(
+                s => (s.sectionName || s.name || s._id || s).toString().trim()
+            );
+            // Debug: log assigned section names
+            console.log('assignedSectionNames:', assignedSectionNames);
+
+            const matchedStudents = studentsArr.filter(stu =>
+                assignedSectionNames.includes(
+                    (stu.section || stu.sectionName || stu.assignedSection || stu.section_id || '').toString().trim()
+                )
+            );
+            // Debug: log matched students
+            console.log('matchedStudents:', matchedStudents);
+
+            setStudentsInSections(matchedStudents.length);
+        } catch (err) {
+            console.error('Error fetching or counting students:', err);
+            setStudentsInSections(0);
+        }
+    }
+    fetchAndCountStudents();
+}, [profileData]);
 
 		const [activeSection, setActiveSection] = useState('overview');
 		// Fetch teacher profile on mount and when switching to overview
@@ -193,89 +249,106 @@ useEffect(() => {
 
 			// Handler for sending teacher message (admin-style)
 			const handleSendTeacherMessage = async (e) => {
-				e.preventDefault();
-				setMessageError("");
-				setMessageSuccess("");
-				setMessageSending(true);
-				try {
-					if (
-						(teacherMessageRecipientType === 'group' && !teacherMessageRecipient) ||
-						(teacherMessageRecipientType === 'specific' && teacherMessageSpecificUsers.length === 0) ||
-						!messageContent.trim()
-					) {
-						setMessageError("Please select recipient(s) and enter a message.");
-						setMessageSending(false);
-						return;
-					}
-					let sentMsg = null;
-					if (teacherMessageRecipientType === 'group') {
-						const { sendAdminMessageToMany } = await import("../api/messageApi");
-						await sendAdminMessageToMany({
-							senderId: currentUser._id,
-							senderRole: "teacher",
-							recipientGroup: teacherMessageRecipient,
-							content: messageContent,
-							subject: ""
-						});
-						setMessageSuccess("Message sent to group.");
-						sentMsg = {
-							_id: 'sent-' + Date.now(),
-							sender: { id: currentUser._id, role: 'teacher' },
-							recipient: { id: teacherMessageRecipient, role: teacherMessageRecipient },
-							type: 'message',
-							subject: '',
-							content: messageContent,
-							status: 'sent',
-							createdAt: new Date().toISOString()
-						};
-					} else {
-						// Send to specific users (multi)
-						for (const userId of teacherMessageSpecificUsers) {
-							const res = await fetch('/api/message/send', {
-								method: 'POST',
-								headers: { 'Content-Type': 'application/json' },
-								body: JSON.stringify({
-									sender: { id: currentUser._id, role: 'teacher' },
-									recipient: { id: userId, role: getUserRoleById(userId) },
-									type: 'message',
-									subject: '',
-									content: messageContent
-								})
-							});
-							if (!res.ok) throw new Error('Failed to send message');
-						}
-						setMessageSuccess("Message sent to selected users.");
-						sentMsg = {
-							_id: 'sent-' + Date.now(),
-							sender: { id: currentUser._id, role: 'teacher' },
-							recipient: { id: teacherMessageSpecificUsers.join(','), role: 'specific' },
-							type: 'message',
-							subject: '',
-							content: messageContent,
-							status: 'sent',
-							createdAt: new Date().toISOString()
-						};
-					}
-					if (sentMsg) {
-						// Persist sent teacher message in localStorage
-						try {
-							const local = localStorage.getItem('teacherSentMessages');
-							let arr = local ? JSON.parse(local) : [];
-							arr = [sentMsg, ...arr];
-							localStorage.setItem('teacherSentMessages', JSON.stringify(arr));
-						} catch {}
-						setInboxMessages(prev => [sentMsg, ...prev]);
-					}
-					setTeacherMessageRecipientType('group');
-					setTeacherMessageRecipient('');
-					setTeacherMessageSpecificUsers([]);
-					setMessageContent('');
-				} catch (err) {
-					setMessageError(err.message || "Failed to send message");
-				} finally {
-					setMessageSending(false);
-				}
-			};
+  e.preventDefault();
+  setMessageError("");
+  setMessageSuccess("");
+  setMessageSending(true);
+  try {
+    if (
+      (teacherMessageRecipientType === 'group' && !teacherMessageRecipient) ||
+      (teacherMessageRecipientType === 'specific' && teacherMessageSpecificUsers.length === 0) ||
+      !messageContent.trim()
+    ) {
+      setMessageError("Please select recipient(s) and enter a message.");
+      setMessageSending(false);
+      return;
+    }
+
+    // Handle file upload (convert to base64)
+    let fileUrl = null;
+    if (teacherMessageFile) {
+      fileUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(teacherMessageFile);
+      });
+    }
+
+    let sentMsg = null;
+    if (teacherMessageRecipientType === 'group') {
+      const { sendAdminMessageToMany } = await import("../api/messageApi");
+      await sendAdminMessageToMany({
+        senderId: currentUser._id,
+        senderRole: "teacher",
+        recipientGroup: teacherMessageRecipient,
+        content: messageContent,
+        subject: "",
+        fileUrl // send file to group
+      });
+      setMessageSuccess("Message sent to group.");
+      sentMsg = {
+        _id: 'sent-' + Date.now(),
+        sender: { id: currentUser._id, role: 'teacher' },
+        recipient: { id: teacherMessageRecipient, role: teacherMessageRecipient },
+        type: 'message',
+        subject: '',
+        content: messageContent,
+        status: 'sent',
+        createdAt: new Date().toISOString(),
+        fileUrl // attach file to local message
+      };
+    } else {
+      // Send to specific users (multi)
+      for (const userId of teacherMessageSpecificUsers) {
+        const res = await fetch('/api/message/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sender: { id: currentUser._id, role: 'teacher' },
+            recipient: { id: userId, role: getUserRoleById(userId) },
+            type: 'message',
+            subject: '',
+            content: messageContent,
+            fileUrl // send file to specific user
+          })
+        });
+        if (!res.ok) throw new Error('Failed to send message');
+      }
+      setMessageSuccess("Message sent to selected users.");
+      sentMsg = {
+        _id: 'sent-' + Date.now(),
+        sender: { id: currentUser._id, role: 'teacher' },
+        recipient: { id: teacherMessageSpecificUsers.join(','), role: 'specific' },
+        type: 'message',
+        subject: '',
+        content: messageContent,
+        status: 'sent',
+        createdAt: new Date().toISOString(),
+        fileUrl // attach file to local message
+      };
+    }
+    if (sentMsg) {
+      // Persist sent teacher message in localStorage
+      try {
+        const local = localStorage.getItem('teacherSentMessages');
+        let arr = local ? JSON.parse(local) : [];
+        arr = [sentMsg, ...arr];
+        localStorage.setItem('teacherSentMessages', JSON.stringify(arr));
+      } catch {}
+      setInboxMessages(prev => [sentMsg, ...prev]);
+    }
+    setTeacherMessageRecipientType('group');
+    setTeacherMessageRecipient('');
+    setTeacherMessageSpecificUsers([]);
+    setMessageContent('');
+    setTeacherMessageFile(null); // clear file after sending
+  } catch (err) {
+    setMessageError(err.message || "Failed to send message");
+  } finally {
+    setMessageSending(false);
+  }
+};
 
 		// Helper to get user role by id from dropdowns
 		function getUserRoleById(id) {
@@ -443,7 +516,7 @@ useEffect(() => {
 		}, [currentUser, activeSection]);
   
 	// Notification system
-	const notifications = useNotifications('teacher');
+	const notifications = useNotifications(currentUser._id);
 
 	// Navigation handlers
 	const handleManageStudentClick = () => {
@@ -574,11 +647,11 @@ useEffect(() => {
 								   <span className="username" style={{ color: '#fff', fontWeight: 600 }}>{teacherName}</span>
 								   <div style={{ position: 'relative', display: 'inline-block' }}>
 									   <NotificationIcon 
-										   unreadCount={notifications.unreadCount}
-										   onClick={notifications.toggleNotifications}
-										   color="#fff"
-									   />
-									   {notifications.unreadCount > 0 && (
+										unreadCount={unreadCount}
+										onClick={toggleNotifications}
+										color="#fff"
+										/>
+									   {unreadCount > 0 && (
 										   <span style={{
 											   position: 'absolute',
 											   top: 2,
@@ -597,7 +670,7 @@ useEffect(() => {
 											   boxShadow: '0 2px 8px rgba(1,6,98,0.10)',
 											   zIndex: 2
 										   }}>
-											   {notifications.unreadCount > 99 ? '99+' : notifications.unreadCount}
+											   {unreadCount > 99 ? '99+' : unreadCount}
 										   </span>
 									   )}
 								   </div>
@@ -608,13 +681,14 @@ useEffect(() => {
 						   </div>
 					   </header>
 					<NotificationDropdown
-						notifications={notifications.notifications}
-						isOpen={notifications.isOpen}
-						onClose={notifications.closeNotifications}
-						onMarkAsRead={notifications.markAsRead}
-						onMarkAllAsRead={notifications.markAllAsRead}
-						onDelete={notifications.deleteNotification}
-					/>
+						notifications={notificationList}
+						isOpen={isOpen}
+						onClose={closeNotifications}
+						onMarkAsRead={markAsRead}
+						onMarkAllAsRead={markAllAsRead}
+						onDelete={deleteNotification}
+						/>
+						
 					   <div className="admin-content" style={{ background: '#f4f6fa', minHeight: '100vh' }}>
 						   {activeSection === 'overview' && (
 							   <div className="dashboard-overview-section redesigned-overview">
@@ -755,6 +829,7 @@ useEffect(() => {
 																						)}
 																					</div>
 																				)}
+																			
 																				<div style={{marginTop:6,display:'flex',flexWrap:'wrap',gap:6}}>
 																					{teacherMessageSpecificUsers.map(id => {
 																						const u = userList.find(u => u._id === id);
@@ -777,6 +852,12 @@ useEffect(() => {
 																		style={{padding:'8px 12px',borderRadius:6,border:'1px solid #ccc',resize:'vertical'}}
 																		required
 																	/>
+																	<input
+																				type="file"
+																				accept="image/*,.pdf,.doc,.docx"
+																				onChange={e => setTeacherMessageFile(e.target.files[0])}
+																				style={{marginTop:8}}
+																				/>
 																	<div style={{display:'flex',gap:12,alignItems:'center'}}>
 																		<button type="submit" className="dashboard-btn primary" disabled={messageSending}>
 																			{messageSending ? 'Sending...' : 'Send'}
@@ -797,111 +878,113 @@ useEffect(() => {
 												<div style={{textAlign:'center',color:'#888'}}>No messages in your inbox.</div>
 											) : (
 												<div style={{display:'flex',flexDirection:'column',gap:18}}>
-													{inboxMessages
-														.filter(msg => {
-															const isSent = msg.sender?.id === currentUser._id;
-															return inboxView === 'sent' ? isSent : !isSent;
-														})
-														.map(msg => {
-															const isSent = msg.sender?.id === currentUser._id;
-															const isExcuse = msg.type === 'excuse_letter';
-															const senderName = isSent ? (profileData?.fullName || teacherName) : (msg.sender?.id ? (senderNames[msg.sender.id] || '...') : 'Unknown');
-															return (
-																<div key={msg._id} style={{
-																	background:'#fff',
-																	borderRadius:14,
-																	padding:'20px 28px',
-																	boxShadow:'0 2px 12px rgba(33,150,243,0.08)',
-																	textAlign:'left',
-																	marginBottom:8,
-																	borderLeft: isSent ? '6px solid #3182ce' : '6px solid #38a169',
-																	position:'relative',
-																	opacity:msg._id && msg._id.toString().startsWith('sent-') ? 0.7 : 1
-																}}>
-																	<div style={{display:'flex',alignItems:'center',gap:12,marginBottom:6}}>
-																		<span style={{fontSize:22}}>{isExcuse ? '📄' : (isSent ? '📤' : '📥')}</span>
-																		<span style={{fontWeight:700,color:'#2b6cb0',fontSize:18}}>
-																			{isExcuse ? 'Excuse Letter' : 'Message'}
-																		</span>
-																		<span style={{
-																			marginLeft:10,
-																			background:isSent ? '#e3f2fd' : '#e6fffa',
-																			color:isSent ? '#3182ce' : '#38a169',
-																			borderRadius:8,
-																			fontSize:13,
-																			fontWeight:600,
-																			padding:'2px 10px',
-																			letterSpacing:0.5
-																		}}>{isSent ? 'Sent' : 'Received'}</span>
-																	</div>
-																	<div style={{marginBottom:8,fontSize:15}}>
-																		<span style={{color:'#888'}}>{isSent ? 'To: ' : 'From: '}</span>
-																		<span style={{color:'#222',fontWeight:500}}>
-																			{isSent
-																				? (() => {
-																					// Show name for group or specific
-																					if (msg.recipient?.role === 'specific' && msg.recipient?.id) {
-																						// Multiple user ids (comma separated)
-																						const ids = msg.recipient.id.split(',');
-																						const names = ids.map(id => {
-																							const u = userList.find(u => u._id === id);
-																							return u ? (u.fullName || u.username || u.email || id) : id;
-																						});
-																						return names.join(', ');
-																					} else if (msg.recipient?.role === 'teachers') {
-																						return 'All Teachers';
-																					} else if (msg.recipient?.role === 'parents') {
-																						return 'All Parents';
-																					} else if (msg.recipient?.role === 'both') {
-																						return 'All Teachers & Parents';
-																					} else if (msg.recipient?.name) {
-																						return msg.recipient.name;
-																					} else if (msg.recipient?.id) {
-																						// Try to resolve single user
-																						const u = userList.find(u => u._id === msg.recipient.id);
-																						return u ? (u.fullName || u.username || u.email || msg.recipient.id) : msg.recipient.id;
-																					} else {
-																						return 'Unknown';
-																					}
-																				})()
-																				: senderName}
-																		</span>
-																	</div>
-																	<div style={{fontSize:'1.08rem',color:'#333',marginBottom:10,whiteSpace:'pre-line'}}>{msg.content}
-																		{isExcuse && msg.fileUrl && (
-																			<div style={{marginTop:8}}>
-																				<a href={msg.fileUrl} download style={{color:'#3182ce',fontWeight:600,textDecoration:'underline',fontSize:15}}>
-																					📎 Download Excuse Letter Attachment
-																				</a>
-																			</div>
-																		)}
-																	</div>
-																	<div style={{display:'flex',alignItems:'center',gap:18,marginTop:6}}>
-																		<span style={{fontSize:13,color:'#888'}}>
-																			{isSent ? 'Sent' : 'Received'}: {new Date(msg.createdAt).toLocaleString()}
-																		</span>
-																		{msg.status && (
-																			<span style={{fontSize:13,color:'#888'}}>
-																				Status: <b style={{color:'#2b6cb0'}}>{msg.status}</b>
-																			</span>
-																		)}
-																		{/* Mark as Read button for received, unread messages */}
-																		{!isSent && msg.status !== 'read' && (
-																			<button onClick={() => handleUpdateStatus(msg._id, 'read')} style={{background:'#38a169',color:'#fff',border:'none',borderRadius:6,padding:'4px 12px',fontWeight:600,cursor:'pointer',fontSize:13}}>
-																				Mark as Read
-																			</button>
-																		)}
-																		{/* Approve button for excuse letter */}
-																		{isExcuse && !isSent && msg.status !== 'approved' && (
-																			<button onClick={() => handleUpdateStatus(msg._id, 'approved', profileData?.fullName || teacherName)} style={{background:'#3182ce',color:'#fff',border:'none',borderRadius:6,padding:'4px 12px',fontWeight:600,cursor:'pointer',fontSize:13}}>
-																				Approve
-																			</button>
-																		)}
-																	</div>
-																	<button onClick={()=>handleDeleteInboxMessage(msg._id)} style={{position:'absolute',top:18,right:18,background:'#fff',color:'#e53e3e',border:'1px solid #e53e3e',borderRadius:6,padding:'4px 12px',fontWeight:600,cursor:'pointer',fontSize:13}}>Delete</button>
-																</div>
-															);
-														})}
+												{inboxMessages
+  .filter(msg => {
+    const isSent = msg.sender?.id === currentUser._id;
+    return inboxView === 'sent' ? isSent : !isSent;
+  })
+  .map(msg => {
+    const isSent = msg.sender?.id === currentUser._id;
+    const isExcuse = msg.type === 'excuse_letter';
+    const senderName = isSent
+      ? (profileData?.fullName || teacherName)
+      : (msg.sender?.id ? (senderNames[msg.sender.id] || '...') : 'Unknown');
+    return (
+      <div key={msg._id} style={{
+        background:'#fff',
+        borderRadius:14,
+        padding:'20px 28px',
+        boxShadow:'0 2px 12px rgba(33,150,243,0.08)',
+        textAlign:'left',
+        marginBottom:8,
+        borderLeft: isSent ? '6px solid #3182ce' : '6px solid #38a169',
+        position:'relative',
+        opacity:msg._id && msg._id.toString().startsWith('sent-') ? 0.7 : 1
+      }}>
+        <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:6}}>
+          <span style={{fontSize:22}}>{isExcuse ? '📄' : (isSent ? '📤' : '📥')}</span>
+          <span style={{fontWeight:700,color:'#2b6cb0',fontSize:18}}>
+            {isExcuse ? 'Excuse Letter' : 'Message'}
+          </span>
+          <span style={{
+            marginLeft:10,
+            background:isSent ? '#e3f2fd' : '#e6fffa',
+            color:isSent ? '#3182ce' : '#38a169',
+            borderRadius:8,
+            fontSize:13,
+            fontWeight:600,
+            padding:'2px 10px',
+            letterSpacing:0.5
+          }}>{isSent ? 'Sent' : 'Received'}</span>
+        </div>
+        <div style={{marginBottom:8,fontSize:15}}>
+          <span style={{color:'#888'}}>{isSent ? 'To: ' : 'From: '}</span>
+          <span style={{color:'#222',fontWeight:500}}>
+            {isSent
+              ? (() => {
+                  if (msg.recipient?.role === 'specific' && msg.recipient?.id) {
+                    const ids = msg.recipient.id.split(',');
+                    const names = ids.map(id => {
+                      const u = userList.find(u => u._id === id);
+                      return u ? (u.fullName || u.username || u.email || id) : id;
+                    });
+                    return names.join(', ');
+                  } else if (msg.recipient?.role === 'teachers') {
+                    return 'All Teachers';
+                  } else if (msg.recipient?.role === 'parents') {
+                    return 'All Parents';
+                  } else if (msg.recipient?.role === 'both') {
+                    return 'All Teachers & Parents';
+                  } else if (msg.recipient?.name) {
+                    return msg.recipient.name;
+                  } else if (msg.recipient?.id) {
+                    const u = userList.find(u => u._id === msg.recipient.id);
+                    return u ? (u.fullName || u.username || u.email || msg.recipient.id) : msg.recipient.id;
+                  } else {
+                    return 'Unknown';
+                  }
+                })()
+              : senderName}
+          </span>
+        </div>
+        <div style={{fontSize:'1.08rem',color:'#333',marginBottom:10,whiteSpace:'pre-line'}}>
+          {msg.content}
+          {/* Show file attachment for any message */}
+          {msg.fileUrl && (
+            <div style={{marginTop:8}}>
+              <a href={msg.fileUrl} download style={{color:'#3182ce',fontWeight:600,textDecoration:'underline',fontSize:15}}>
+                📎 Download Attachment
+              </a>
+            </div>
+          )}
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:18,marginTop:6}}>
+          <span style={{fontSize:13,color:'#888'}}>
+            {isSent ? 'Sent' : 'Received'}: {new Date(msg.createdAt).toLocaleString()}
+          </span>
+          {msg.status && (
+            <span style={{fontSize:13,color:'#888'}}>
+              Status: <b style={{color:'#2b6cb0'}}>{msg.status}</b>
+            </span>
+          )}
+          {/* Mark as Read button for received, unread messages */}
+          {!isSent && msg.status !== 'read' && (
+            <button onClick={() => handleUpdateStatus(msg._id, 'read')} style={{background:'#38a169',color:'#fff',border:'none',borderRadius:6,padding:'4px 12px',fontWeight:600,cursor:'pointer',fontSize:13}}>
+              Mark as Read
+            </button>
+          )}
+          {/* Approve button for excuse letter */}
+          {isExcuse && !isSent && msg.status !== 'approved' && (
+            <button onClick={() => handleUpdateStatus(msg._id, 'approved', profileData?.fullName || teacherName)} style={{background:'#3182ce',color:'#fff',border:'none',borderRadius:6,padding:'4px 12px',fontWeight:600,cursor:'pointer',fontSize:13}}>
+              Approve
+            </button>
+          )}
+        </div>
+        <button onClick={()=>handleDeleteInboxMessage(msg._id)} style={{position:'absolute',top:18,right:18,background:'#fff',color:'#e53e3e',border:'1px solid #e53e3e',borderRadius:6,padding:'4px 12px',fontWeight:600,cursor:'pointer',fontSize:13}}>Delete</button>
+      </div>
+    );
+  })
+}
 												</div>
 											)}
 										</div>

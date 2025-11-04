@@ -1,4 +1,3 @@
-
 const express = require('express');
 const router = express.Router();
 const Message = require('../models/Message');
@@ -72,12 +71,15 @@ router.post('/send', upload.single('file'), async (req, res) => {
       // Save file URL relative to /uploads
       fileUrl = '/uploads/' + req.file.filename;
     }
+    // Merge: Always set title and message for frontend notification compatibility
     const message = new Message({
       sender,
       recipient,
       type: type || 'message',
-      subject,
-      content,
+      title: subject,      // <-- Add this line for notification title
+      message: content,    // <-- Add this line for notification message/body
+      subject,             // (optional, keep for reference)
+      content,             // (optional, keep for reference)
       excuseDate: type === 'excuse_letter' ? excuseDate : undefined,
       status: type === 'excuse_letter' ? 'pending' : 'unread',
       fileUrl
@@ -118,6 +120,8 @@ router.patch('/:id/status', async (req, res) => {
         sender: message.recipient, // teacher
         recipient: message.sender, // parent
         type: 'message',
+        title: `Excuse Letter ${status.charAt(0).toUpperCase() + status.slice(1)}`, // Add title
+        message: `Your excuse letter for ${message.excuseDate ? new Date(message.excuseDate).toLocaleDateString() : 'an absence'} was ${status}. ${response ? 'Response: ' + response : ''}`, // Add message
         subject: `Excuse Letter ${status.charAt(0).toUpperCase() + status.slice(1)}`,
         content: `Your excuse letter for ${message.excuseDate ? new Date(message.excuseDate).toLocaleDateString() : 'an absence'} was ${status}. ${response ? 'Response: ' + response : ''}`,
         status: 'unread',

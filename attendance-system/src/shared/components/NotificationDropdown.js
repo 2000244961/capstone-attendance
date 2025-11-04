@@ -11,16 +11,23 @@ const NotificationDropdown = ({
 }) => {
   if (!isOpen) return null;
 
-  const formatTimeAgo = (timestamp) => {
+  // Helper: prefer timestamp, fallback to createdAt, fallback to null
+  const getDateString = (n) => n.timestamp || n.createdAt || null;
+
+  // Format "time ago" or fallback to full date if invalid
+  const formatTimeAgo = (n) => {
+    const dateString = getDateString(n);
+    if (!dateString) return 'No date';
+    const time = new Date(dateString);
+    if (isNaN(time.getTime())) return 'No date';
     const now = new Date();
-    const time = new Date(timestamp);
     const diffInSeconds = Math.floor((now - time) / 1000);
 
     if (diffInSeconds < 60) return 'Just now';
     if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
     if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
     if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
-    return time.toLocaleDateString();
+    return time.toLocaleString();
   };
 
   const getPriorityColor = (priority) => {
@@ -44,7 +51,7 @@ const NotificationDropdown = ({
         <div className="notification-header">
           <h3>🔔 Notifications</h3>
           <div className="notification-actions">
-            {notifications.some(n => !n.isRead) && (
+            {notifications.some(n => !(n.read ?? n.isRead)) && (
               <button
                 className="mark-all-read-btn"
                 onClick={onMarkAllAsRead}
@@ -67,28 +74,46 @@ const NotificationDropdown = ({
             <li className="notification-empty">No notifications</li>
           ) : (
             notifications.map(n => (
-              <li key={n.id} className={`notification-item ${n.isRead ? 'read' : 'unread'}`} style={{ borderLeft: `4px solid ${getPriorityColor(n.priority)}` }}>
+              <li
+                key={n._id || n.id}
+                className={`notification-item ${!(n.read ?? n.isRead) ? 'unread' : 'read'}`}
+                style={{ borderLeft: `4px solid ${getPriorityColor(n.priority)}` }}
+              >
                 <span className="notification-icon">{n.icon}</span>
                 <div className="notification-info">
-                  <div className="notification-title">{n.title}</div>
-                  <div className="notification-message">{n.message}</div>
+                  <div className="notification-title">
+                    {n.title || n.message || n.content}
+                  </div>
+                  {/* Only show message if it's different from the title */}
+                  {n.message && n.message !== n.title && n.message !== n.content && (
+                    <div className="notification-message">{n.message}</div>
+                  )}
+                  {/* Only show content if it's different from both title and message */}
+                  {n.content && n.content !== n.title && n.content !== n.message && (
+                    <div className="notification-full-content">{n.content}</div>
+                  )}
                   {n.sender && (
                     <div className="notification-sender" style={{ color: '#888', fontSize: '0.95em', marginTop: 2 }}>
                       <b>From:</b> {n.sender}
                     </div>
                   )}
-                  <div className="notification-time">{formatTimeAgo(n.timestamp)}</div>
+                  <div className="notification-time">{formatTimeAgo(n)}</div>
                 </div>
                 <div className="notification-actions">
-                  {!n.isRead && (
-                    <button className="mark-read-btn" onClick={() => onMarkAsRead(n.id)} title="Mark as read">✓</button>
+                  {!(n.read ?? n.isRead) && (
+                    <button className="mark-read-btn" onClick={() => onMarkAsRead(n._id || n.id)} title="Mark as read">✓</button>
                   )}
-                  <button className="delete-btn" onClick={() => onDelete(n.id)} title="Delete">🗑️</button>
+                  <button className="delete-btn" onClick={() => onDelete(n._id || n.id)} title="Delete">🗑️</button>
                 </div>
               </li>
             ))
           )}
         </ul>
+        {notifications.length > 0 && (
+          <div className="notification-footer">
+            <p>{notifications.length} total notification{notifications.length !== 1 ? 's' : ''}</p>
+          </div>
+        )}
       </div>
     </div>
   );

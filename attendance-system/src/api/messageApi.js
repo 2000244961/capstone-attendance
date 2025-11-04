@@ -1,5 +1,5 @@
 // Send a message from admin to all teachers, all parents, or both
-export async function sendAdminMessageToMany({ senderId, senderRole, recipientGroup, recipientIds, content, subject }) {
+export async function sendAdminMessageToMany({ senderId, senderRole, recipientGroup, recipientIds, content, subject, fileUrl }) {
   let users = [];
   if (Array.isArray(recipientIds) && recipientIds.length > 0) {
     // Send to specific users
@@ -31,8 +31,10 @@ export async function sendAdminMessageToMany({ senderId, senderRole, recipientGr
       sender: { id: senderId, role: senderRole },
       recipient: { id: user._id, role: user.type },
       type: 'message',
-      subject: subject || '',
-      content
+      // Use subject as title and content as message in backend!
+      subject: subject || '',   // Announcement title
+      content,                  // Announcement body/message
+      fileUrl: fileUrl || null
     };
     const res = await fetch('/api/message/send', {
       method: 'POST',
@@ -44,6 +46,7 @@ export async function sendAdminMessageToMany({ senderId, senderRole, recipientGr
   }));
   return results;
 }
+
 // Delete a message by ID
 export async function deleteMessage(messageId) {
   const res = await fetch(`/api/message/${messageId}`, {
@@ -52,6 +55,7 @@ export async function deleteMessage(messageId) {
   if (!res.ok) throw new Error('Failed to delete message');
   return await res.json();
 }
+
 // Update message status (approve/decline)
 export async function updateMessageStatus(messageId, status) {
   const res = await fetch(`/api/message/${messageId}/status`, {
@@ -62,7 +66,7 @@ export async function updateMessageStatus(messageId, status) {
   if (!res.ok) throw new Error('Failed to update message status');
   return await res.json();
 }
-// api/messageApi.js
+
 // API helpers for inbox and excuse letter features
 
 export async function fetchInbox(userId, role = 'teacher') {

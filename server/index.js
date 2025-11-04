@@ -88,9 +88,16 @@ app.use('/api/user', userRoutes);
 if (userRoutes.announcementRouter) {
   app.use('/api/announcement', userRoutes.announcementRouter);
 }
-app.use('/api/student', require('./routes/student'));
+app.use('/api/students', require('./routes/student'));
 app.use('/api/subjectSection', require('./routes/subjectSection'));
 app.use('/api/message', require('./routes/message'));
+
+//notification routes
+const notificationRoutes = require('./routes/notification');
+app.use('/api/notifications', notificationRoutes);
+
+const announcementRoutes = require('./routes/announcement');
+app.use('/api/announcements', announcementRoutes);
 
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
