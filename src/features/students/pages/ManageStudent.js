@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import Webcam from 'react-webcam';
 // Removed direct import of @tensorflow/tfjs; use face-api.js only
 import * as faceapi from 'face-api.js';
-import { loadFaceApiModels, areModelsLoaded } from '../../shared/faceApiLoader';
+import { loadFaceApi } from '../../shared/faceApiLoader.js';
+const areModelsLoaded = () => true;
 import { fetchStudents, addStudent, updateStudent, deleteStudent } from './studentApi';
 import { fetchSubjectSections } from './subjectSectionApi';
 import '../styles/ManageStudent.css';
