@@ -10,7 +10,7 @@ import DashboardTeacher from './features/teacher/pages/DashboardTeacher';
 import DashboardAdmin from './features/admin/pages/DashboardAdmin';
 import DashboardParent from './features/parent/pages/DashboardParent';
 import FaceRecognition from './features/attendance/pages/FaceRecognition';
-import ManageStudent from '../attendance-system/src/features/students/pages/ManageStudent';
+import ManageStudent from '../features/students/pages/ManageStudent';
 import ManageAttendance from './features/attendance/pages/ManageAttendance';
 import ManageSubjectSection from './features/students/pages/ManageSubjectSection';
 import ProtectedRoute from './features/auth/components/ProtectedRoute';
