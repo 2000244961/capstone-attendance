@@ -5,12 +5,12 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './shared/initializeNotificationData';
 
 // Import your components from the new feature-based structure
-import Login from '../src/archive/Login_fixed';
+import Login from './archive/Login_fixed';
 import DashboardTeacher from './features/teacher/pages/DashboardTeacher';
 import DashboardAdmin from './features/admin/pages/DashboardAdmin';
 import DashboardParent from './features/parent/pages/DashboardParent';
 import FaceRecognition from './features/attendance/pages/FaceRecognition';
-import ManageStudent from '../features/students/pages/ManageStudent';
+import ManageStudent from './features/students/pages/ManageStudent';
 import ManageAttendance from './features/attendance/pages/ManageAttendance';
 import ManageSubjectSection from './features/students/pages/ManageSubjectSection';
 import ProtectedRoute from './features/auth/components/ProtectedRoute';
