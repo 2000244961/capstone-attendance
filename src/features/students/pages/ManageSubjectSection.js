@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../styles/ManageSubjectSection.css';
+// Replace with your actual backend API endpoints
+const API_BASE = '/api/subjectSection';
 
 function ManageSubjectSection() {
   const navigate = useNavigate();
@@ -11,8 +13,17 @@ function ManageSubjectSection() {
   });
 
   useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem('subjects')) || [];
-    setSections(stored);
+    async function fetchSections() {
+      try {
+        const res = await fetch(API_BASE);
+        if (!res.ok) throw new Error('Failed to fetch sections');
+        const data = await res.json();
+        setSections(data);
+      } catch (err) {
+        setSections([]);
+      }
+    }
+    fetchSections();
   }, []);
 
   const handleInputChange = e => {
@@ -20,12 +31,12 @@ function ManageSubjectSection() {
     setNewSubject(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleAddSubject = () => {
+  const handleAddSubject = async () => {
     if (!newSubject.subjectName || !newSubject.sectionName) {
       alert('Please fill in all fields.');
       return;
     }
-
+    // Check for existing in backend
     const existing = sections.find(s =>
       s.subjectName.toLowerCase() === newSubject.subjectName.toLowerCase() &&
       s.sectionName.toLowerCase() === newSubject.sectionName.toLowerCase()
@@ -34,24 +45,35 @@ function ManageSubjectSection() {
       alert('This subject/section combination already exists.');
       return;
     }
-
-    const newEntry = {
-      ...newSubject,
-      id: Date.now(),
-      studentCount: 0,
-    };
-
-    const updated = [...sections, newEntry];
-    setSections(updated);
-    localStorage.setItem('subjects', JSON.stringify(updated));
-    setNewSubject({ subjectName: '', sectionName: '' });
+    try {
+      const res = await fetch(API_BASE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSubject)
+      });
+      if (!res.ok) throw new Error('Failed to add subject/section');
+      setNewSubject({ subjectName: '', sectionName: '' });
+      // Refresh list
+      const updatedRes = await fetch(API_BASE);
+      const updated = await updatedRes.json();
+      setSections(updated);
+    } catch (err) {
+      alert('Error adding subject/section');
+    }
   };
 
-  const handleDelete = id => {
+  const handleDelete = async id => {
     if (!window.confirm('Are you sure you want to delete this section?')) return;
-    const updated = sections.filter(s => s.id !== id);
-    setSections(updated);
-    localStorage.setItem('subjects', JSON.stringify(updated));
+    try {
+      const res = await fetch(`${API_BASE}/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete section');
+      // Refresh list
+      const updatedRes = await fetch(API_BASE);
+      const updated = await updatedRes.json();
+      setSections(updated);
+    } catch (err) {
+      alert('Error deleting section');
+    }
   };
 
   return (

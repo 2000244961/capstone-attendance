@@ -7,22 +7,35 @@ const router = express.Router();
 // Get attendance summary grouped by section for a given date (or today if not specified)
 router.get('/sections', async (req, res) => {
   try {
-    let date = req.query.date;
-    if (!date) {
-      date = new Date().toISOString().slice(0, 10);
+    const { date, month } = req.query;
+    let query = {};
+    if (date) {
+      // Single day
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      query.date = { $gte: start, $lt: end };
+    } else if (month) {
+      // Month format: YYYY-MM
+      const start = new Date(month + '-01');
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setMonth(end.getMonth() + 1);
+      query.date = { $gte: start, $lt: end };
+    } else {
+      // Default: today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+      query.date = { $gte: today, $lt: tomorrow };
     }
-    // Get DB records
-    const dbRecords = await Attendance.find({ date });
-    // Get localStorage records if available (for demo/testing)
-    let localRecords = [];
-    if (global.localAttendanceRecords && Array.isArray(global.localAttendanceRecords)) {
-      localRecords = global.localAttendanceRecords.filter(r => r.date === date);
-    }
-    // Merge DB and local records
-    const allRecords = [...dbRecords, ...localRecords];
-    // Group by section
+
+    const dbRecords = await Attendance.find(query);
+
     const sectionMap = {};
-    allRecords.forEach(r => {
+    dbRecords.forEach(r => {
       const section = r.section || 'Unassigned';
       if (!sectionMap[section]) {
         sectionMap[section] = { section, present: 0, absent: 0 };
@@ -35,17 +48,19 @@ router.get('/sections', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-  });
+});
+
 // Get today's attendance summary
 router.get('/today', async (req, res) => {
   try {
-    const today = new Date().toISOString().slice(0, 10);
-    let query = { date: today };
-    // If ?all=true, do not filter by teacher/section/subject, just aggregate all records for today
-    // (Default behavior is already all records for today)
-    // This is for future extensibility if you want to filter by teacherId, etc.
-    // For now, just aggregate all records for today
-    const records = await Attendance.find(query);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const records = await Attendance.find({
+      date: { $gte: today, $lt: tomorrow }
+    });
     const present = records.filter(r => r.status === 'present').length;
     const absent = records.filter(r => r.status === 'absent').length;
     const late = records.filter(r => r.status === 'late').length;
@@ -56,10 +71,23 @@ router.get('/today', async (req, res) => {
   }
 });
 
-// Get all attendance records
+// Get all attendance records for a specific date (and section if provided)
 router.get('/', async (req, res) => {
   try {
-    const records = await Attendance.find();
+    const { date, section } = req.query;
+    let query = {};
+    if (date) {
+      // Accept any time on the selected date
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+      query.date = { $gte: start, $lte: end };
+    }
+    if (section) {
+      query.section = section;
+    }
+    const records = await Attendance.find(query).sort({ timestamp: -1 });
     res.json(records);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -69,47 +97,49 @@ router.get('/', async (req, res) => {
 // Add a new attendance record
 router.post('/', async (req, res) => {
   try {
-  console.log('Received attendance POST:', req.body);
-  const { studentId, date, name, section, subject, status } = req.body;
-  // Check for existing record for this student, subject, and date
-  const existing = await Attendance.findOne({ studentId, subject, date });
-  if (existing) {
-    return res.status(409).json({ error: 'Attendance already recorded for this student for this subject today.' });
-  }
+    console.log('Received attendance POST:', req.body);
+    const { studentId, date, name, section, subject, status } = req.body;
+    // Check for existing record for this student, subject, and date
+    const existing = await Attendance.findOne({ studentId, subject, date });
+    if (existing) {
+      return res.status(409).json({ error: 'Attendance already recorded for this student for this subject today.' });
+    }
 
-  // Time-based attendance rule
-  let scanTime = req.body.time;
-  let scanDateObj;
-  if (scanTime) {
-    // Try to parse as local time (HH:mm or HH:mm:ss)
-    const timeParts = scanTime.split(':');
-    if (timeParts.length >= 2) {
-      // Build a local date string
-      const now = new Date();
-      scanDateObj = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(timeParts[0]), parseInt(timeParts[1]), timeParts[2] ? parseInt(timeParts[2]) : 0);
+    // Time-based attendance rule
+    let scanTime = req.body.time;
+    let scanDateObj;
+    if (scanTime) {
+      const timeParts = scanTime.split(':');
+      if (timeParts.length >= 2) {
+        const now = new Date();
+        scanDateObj = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(timeParts[0]), parseInt(timeParts[1]), timeParts[2] ? parseInt(timeParts[2]) : 0);
+      } else {
+        scanDateObj = new Date();
+      }
     } else {
       scanDateObj = new Date();
     }
-  } else {
-    scanDateObj = new Date();
-  }
-  // Get hours and minutes
-  const hours = scanDateObj.getHours();
-  const minutes = scanDateObj.getMinutes();
-  let attendanceStatus = status;
-  if (attendanceStatus === 'present') {
-    // Only allow present between 6:00 AM and 4:00 PM (16:00)
-    const isAfterStart = (hours > 6 || (hours === 6 && minutes >= 0));
-    const isBeforeEnd = (hours < 16 || (hours === 16 && minutes === 0));
-    if (isAfterStart && isBeforeEnd) {
-      attendanceStatus = 'present';
-    } else {
-      attendanceStatus = 'absent';
-    }
-  }
-  // Create new attendance record with enforced status
-  const newRecord = new Attendance({ ...req.body, status: attendanceStatus });
-  await newRecord.save();
+    // Get hours and minutes
+    const hours = scanDateObj.getHours();
+    const minutes = scanDateObj.getMinutes();
+    // --- FIXED LOGIC: Mark present only if scan is between 6:00 and 16:00 inclusive ---
+    const scanMinutes = hours * 60 + minutes;
+    const isWithinWindow = scanMinutes >= 360 && scanMinutes <= 960; // 6:00 to 16:00
+    let attendanceStatus = isWithinWindow ? 'present' : 'absent';
+
+    // Set date to midnight for consistency
+    const recordDate = new Date(date);
+    recordDate.setHours(0, 0, 0, 0);
+
+    // Create new attendance record with enforced status
+    const newRecord = new Attendance({
+      ...req.body,
+      status: attendanceStatus,
+      date: recordDate,
+      timestamp: scanDateObj
+    });
+    await newRecord.save();
+
     // Emit real-time event if Socket.IO is available
     if (req.io) {
       req.io.emit('attendance:new', newRecord);
@@ -117,16 +147,12 @@ router.post('/', async (req, res) => {
     // Notify parent by email (if found)
     try {
       const parentEmail = await findParentEmailByStudentId(studentId);
-      // Use provided time or current time if not present
       let scanTime = req.body.time;
       let formattedTime = '';
-      console.log('Scan time received from frontend:', scanTime);
       if (scanTime) {
-        // If scanTime is already in HH:mm AM/PM format, use as is
         if (/\d{1,2}:\d{2} (AM|PM)/.test(scanTime)) {
           formattedTime = scanTime;
         } else {
-          // Try to parse as time string
           const dateObj = new Date(`${date}T${scanTime}`);
           if (!isNaN(dateObj.getTime())) {
             formattedTime = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
@@ -138,9 +164,8 @@ router.post('/', async (req, res) => {
         formattedTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
       }
       if (parentEmail) {
-        // If image is present, attach as inline image
         let attachments = undefined;
-        let htmlContent = `<p>Dear Parent,</p><p>Your child <b>${name}</b> has been marked <b>present</b> for section <b>${section}</b> and subject <b>${subject}</b> on <b>${date}</b> at <b>${formattedTime}</b>.</p>`;
+        let htmlContent = `<p>Dear Parent,</p><p>Your child <b>${name}</b> has been marked <b>${attendanceStatus}</b> for section <b>${section}</b> and subject <b>${subject}</b> on <b>${date}</b> at <b>${formattedTime}</b>.</p>`;
         if (req.body.image) {
           attachments = [{
             filename: 'student.jpg',
@@ -154,7 +179,7 @@ router.post('/', async (req, res) => {
         await sendMail({
           to: parentEmail,
           subject: `Attendance Notification for ${name}`,
-          text: `Dear Parent,\n\nYour child ${name} has been marked present for section ${section} and subject ${subject} on ${date} at ${formattedTime}.\n\nThank you.`,
+          text: `Dear Parent,\n\nYour child ${name} has been marked ${attendanceStatus} for section ${section} and subject ${subject} on ${date} at ${formattedTime}.\n\nThank you.`,
           html: htmlContent,
           attachments
         });
@@ -172,7 +197,6 @@ router.post('/', async (req, res) => {
   }
 });
 
-
 // Update a student record
 router.put('/:id', async (req, res) => {
   try {
@@ -184,6 +208,8 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+
+
 // Delete a student record
 router.delete('/:id', async (req, res) => {
   try {
@@ -194,16 +220,16 @@ router.delete('/:id', async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
-    
-    // Debug route: Get latest 10 attendance records
-    router.get('/debug/latest', async (req, res) => {
-      try {
-        const records = await Attendance.find().sort({ date: -1, timestamp: -1 }).limit(10);
-        res.json(records);
-      } catch (err) {
-        res.status(500).json({ error: err.message });
-      }
-    });
+
+// Debug route: Get latest 10 attendance records
+router.get('/debug/latest', async (req, res) => {
+  try {
+    const records = await Attendance.find().sort({ date: -1, timestamp: -1 }).limit(10);
+    res.json(records);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Delete attendance records by studentId
 router.delete('/deleteByStudent/:studentId', async (req, res) => {
@@ -211,7 +237,6 @@ router.delete('/deleteByStudent/:studentId', async (req, res) => {
     const studentId = req.params.studentId;
     const result = await Attendance.deleteMany({ studentId });
     if (result.deletedCount > 0) {
-      // Emit real-time event for bulk delete
       if (req.io) {
         req.io.emit('attendance:bulkDelete', { studentId });
       }

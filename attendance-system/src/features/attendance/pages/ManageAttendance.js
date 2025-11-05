@@ -7,11 +7,10 @@ import { fetchAttendance, deleteAttendance, updateAttendance } from './attendanc
 import { fetchUserProfile } from '../../../api/userApi';
 
 const ManageAttendance = () => {
-        const navigate = useNavigate();
-        const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-        // Use React state only for section/subject (no localStorage)
-        const [selectedSection, setSelectedSection] = useState('');
-        const [selectedSubject, setSelectedSubject] = useState('');
+    const navigate = useNavigate();
+    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const [selectedSection, setSelectedSection] = useState('');
+    const [selectedSubject, setSelectedSubject] = useState('');
     const [allowedSubjects, setAllowedSubjects] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [attendanceData, setAttendanceData] = useState([]);
@@ -24,76 +23,68 @@ const ManageAttendance = () => {
         const loadAttendance = async () => {
             setLoading(true);
             try {
-                                // Get teacher info from backend/session/context (not localStorage)
-                                let teacherId = null;
-                                // Example: window.currentUser or from a React context
-                                if (window.currentUser && (window.currentUser._id || window.currentUser.username)) {
-                                    teacherId = window.currentUser._id || window.currentUser.username;
-                                }
-                                let allowedSectionsArr = [];
-                                let allowedSubjectsArr = [];
-                    if (teacherId) {
-                        try {
-                            const profile = await fetchUserProfile(teacherId);
-                            console.log('Teacher profile:', profile);
-                            if (profile && Array.isArray(profile.assignedSections)) {
-                                allowedSectionsArr = profile.assignedSections.map(s => s.sectionName);
-                                // Collect subjects for each section
-                                if (profile.assignedSections.some(s => s.subjects)) {
-                                    if (selectedSection) {
-                                        // Only subjects for selected section
-                                        const sectionObj = profile.assignedSections.find(s => s.sectionName === selectedSection);
-                                        allowedSubjectsArr = sectionObj && Array.isArray(sectionObj.subjects) ? sectionObj.subjects : [];
-                                        // Fallback: if no subjects for selected section, show all subjects
-                                        if (!allowedSubjectsArr.length) {
-                                            allowedSubjectsArr = profile.assignedSections.flatMap(s => s.subjects || []);
-                                            allowedSubjectsArr = [...new Set(allowedSubjectsArr)];
-                                        }
-                                    } else {
-                                        // All subjects from all sections
+                let teacherId = null;
+                if (window.currentUser && (window.currentUser._id || window.currentUser.username)) {
+                    teacherId = window.currentUser._id || window.currentUser.username;
+                }
+                let allowedSectionsArr = [];
+                let allowedSubjectsArr = [];
+                if (teacherId) {
+                    try {
+                        const profile = await fetchUserProfile(teacherId);
+                        if (profile && Array.isArray(profile.assignedSections)) {
+                            allowedSectionsArr = profile.assignedSections.map(s => s.sectionName);
+                            if (profile.assignedSections.some(s => s.subjects)) {
+                                if (selectedSection) {
+                                    const sectionObj = profile.assignedSections.find(s => s.sectionName === selectedSection);
+                                    allowedSubjectsArr = sectionObj && Array.isArray(sectionObj.subjects) ? sectionObj.subjects : [];
+                                    if (!allowedSubjectsArr.length) {
                                         allowedSubjectsArr = profile.assignedSections.flatMap(s => s.subjects || []);
                                         allowedSubjectsArr = [...new Set(allowedSubjectsArr)];
                                     }
+                                } else {
+                                    allowedSubjectsArr = profile.assignedSections.flatMap(s => s.subjects || []);
+                                    allowedSubjectsArr = [...new Set(allowedSubjectsArr)];
                                 }
                             }
-                        } catch {}
+                        }
+                    } catch {}
+                }
+                // Fetch attendance data from backend
+                const data = await fetchAttendance({ date: selectedDate, section: selectedSection });
+
+                // Allowed sections present in today's attendance records
+                const sectionSet = new Set();
+                data.forEach(record => {
+                    if (
+                        new Date(record.date).toISOString().slice(0, 10) === selectedDate &&
+                        record.section
+                    ) {
+                        sectionSet.add(record.section);
                     }
-                    // Only show sections that exist in the attendance data for this teacher and date
-                    const data = await fetchAttendance();
-                    // Show all sections present in today's attendance records
-                    const sectionSet = new Set();
-                    data.forEach(record => {
-                        if (
-                            record.date === selectedDate &&
-                            record.viaFacialRecognition === true &&
-                            record.section
-                        ) {
-                            sectionSet.add(record.section);
-                        }
-                    });
-                    setAllowedSections(Array.from(sectionSet));
-                    // Show all subjects present in today's attendance records (filtered by section if selected)
-                    const subjectSet = new Set();
-                    data.forEach(record => {
-                        if (
-                            record.date === selectedDate &&
-                            record.viaFacialRecognition === true &&
-                            record.subject &&
-                            (!selectedSection || record.section === selectedSection)
-                        ) {
-                            subjectSet.add(record.subject);
-                        }
-                    });
-                    setAllowedSubjects(Array.from(subjectSet));
-                    console.log('Allowed subjects:', Array.from(subjectSet));
-                    // Only show records for allowed sections
-                    const filtered = data.filter(record =>
-                                            String(record.date) === String(selectedDate) &&
-                                            record.viaFacialRecognition === true &&
-                                            (allowedSectionsArr.length === 0 || allowedSectionsArr.includes(record.section))
-                                        );
-                    setAttendanceData(filtered);
-                    setLastUpdate(Date.now());
+                });
+                setAllowedSections(Array.from(sectionSet));
+
+                // Allowed subjects present in today's attendance records
+                const subjectSet = new Set();
+                data.forEach(record => {
+                    if (
+                        new Date(record.date).toISOString().slice(0, 10) === selectedDate &&
+                        record.subject &&
+                        (!selectedSection || record.section === selectedSection)
+                    ) {
+                        subjectSet.add(record.subject);
+                    }
+                });
+                setAllowedSubjects(Array.from(subjectSet));
+
+                // Show all records for allowed sections (including absent)
+                const filtered = data.filter(record =>
+                    new Date(record.date).toISOString().slice(0, 10) === selectedDate &&
+                    (allowedSectionsArr.length === 0 || allowedSectionsArr.includes(record.section))
+                );
+                setAttendanceData(filtered);
+                setLastUpdate(Date.now());
             } catch (err) {
                 setError('Failed to load attendance records');
             }
@@ -104,11 +95,9 @@ const ManageAttendance = () => {
         // Socket.IO setup for real-time updates
         const socket = io('http://localhost:7000');
         socket.on('attendance:new', (newRecord) => {
-            // Only add if the record matches the selected date, is via facial recognition, and is in allowed sections
             if (
-              newRecord.date === selectedDate &&
-              newRecord.viaFacialRecognition === true &&
-              (allowedSections.length === 0 || allowedSections.includes(newRecord.section))
+                new Date(newRecord.date).toISOString().slice(0, 10) === selectedDate &&
+                (allowedSections.length === 0 || allowedSections.includes(newRecord.section))
             ) {
                 setAttendanceData(prev => [newRecord, ...prev]);
                 setLastUpdate(Date.now());
@@ -119,28 +108,24 @@ const ManageAttendance = () => {
         };
     }, [selectedDate, selectedSection]);
 
-    // Filter attendance data
+    // Filter attendance data (do NOT filter out absent records)
     const filteredAttendance = useMemo(() => {
         return attendanceData.filter(record => {
-            const matchesDate = String(record.date) === String(selectedDate);
+            const matchesDate = new Date(record.date).toISOString().slice(0, 10) === selectedDate;
             const matchesSection = !selectedSection || record.section === selectedSection;
             const matchesSubject = !selectedSubject || record.subject === selectedSubject;
-            const matchesSearch = !searchTerm || 
-                record.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                String(record.studentId).toLowerCase().includes(searchTerm.toLowerCase());
-            if (!matchesDate) {
-              console.log('[DEBUG] Attendance record date', record.date, 'does not match selectedDate', selectedDate);
-            }
+            const matchesSearch = !searchTerm ||
+                (record.name && record.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                (String(record.studentId).toLowerCase().includes(searchTerm.toLowerCase()));
             return matchesDate && matchesSection && matchesSubject && matchesSearch;
         });
     }, [attendanceData, selectedSection, selectedSubject, searchTerm]);
 
     // Summary statistics
     const summary = useMemo(() => {
-    const present = filteredAttendance.filter(r => (r.status && r.status.toLowerCase() === 'present')).length;
-    const late = filteredAttendance.filter(r => (r.status && r.status.toLowerCase() === 'late')).length;
-    const absent = filteredAttendance.filter(r => (r.status && r.status.toLowerCase() === 'absent')).length;
-    return { present, late, absent, total: present + late + absent };
+        const present = filteredAttendance.filter(r => (r.status && r.status.toLowerCase() === 'present')).length;
+        const absent = filteredAttendance.filter(r => (r.status && r.status.toLowerCase() === 'absent')).length;
+        return { present, absent, total: present + absent };
     }, [filteredAttendance]);
 
     // Update attendance status
@@ -184,7 +169,6 @@ const ManageAttendance = () => {
     const handleDeleteAllAttendanceForStudent = async (studentId, studentName) => {
         if (window.confirm(`Are you sure you want to delete ALL attendance records for ${studentName}?`)) {
             try {
-                // Call backend API to delete all attendance records for this student
                 const response = await fetch(`/api/attendance/deleteByStudent/${studentId}`, {
                     method: 'DELETE',
                 });
@@ -236,7 +220,6 @@ const ManageAttendance = () => {
                     </button>
                     <h1 style={{ marginLeft: 0 }}>📋 Manage Attendance</h1>
                 </div>
-                {/* Removed real-time status and last updated */}
             </div>
             {/* Filters */}
             <div className="filters-container">
@@ -256,7 +239,7 @@ const ManageAttendance = () => {
                         value={selectedSection}
                         onChange={(e) => {
                             setSelectedSection(e.target.value);
-                            setSelectedSubject(''); // Reset subject when section changes
+                            setSelectedSubject('');
                         }}
                     >
                         <option value="">All Sections</option>
@@ -313,13 +296,6 @@ const ManageAttendance = () => {
                         <p>Present</p>
                     </div>
                 </div>
-                <div className="summary-card late">
-                    <div className="summary-icon">⏰</div>
-                    <div className="summary-content">
-                        <h3>{summary.late}</h3>
-                        <p>Late</p>
-                    </div>
-                </div>
                 <div className="summary-card absent">
                     <div className="summary-icon">❌</div>
                     <div className="summary-content">
@@ -335,7 +311,6 @@ const ManageAttendance = () => {
                     </div>
                 </div>
             </div>
-            {/* Export button moved beside search input above */}
             <div className="table-container">
                 <div className="table-header">
                     <div className="table-title-section">
@@ -376,7 +351,6 @@ const ManageAttendance = () => {
                                                 </td>
                                                 <td>{(() => {
                                                     if (!record.timestamp || record.timestamp === '-') return '-';
-                                                    // Try to parse ISO or fallback to string
                                                     let dateObj;
                                                     if (record.recordedAt) {
                                                         dateObj = new Date(record.recordedAt);

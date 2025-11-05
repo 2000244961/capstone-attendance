@@ -1,6 +1,14 @@
 // Basic attendance API for ManageAttendance
-export async function fetchAttendance() {
-  const response = await fetch('/api/attendance');
+
+// Fetch attendance records with optional date and section filters
+export async function fetchAttendance({ date, section } = {}) {
+  let url = '/api/attendance';
+  const params = [];
+  if (date) params.push(`date=${encodeURIComponent(date)}`);
+  if (section) params.push(`section=${encodeURIComponent(section)}`);
+  if (params.length > 0) url += `?${params.join('&')}`;
+
+  const response = await fetch(url);
   if (!response.ok) throw new Error('Failed to fetch attendance');
   return response.json();
 }

@@ -13,81 +13,59 @@ const ManageAttendance = () => {
   const [students, setStudents] = useState([]);
   const [lastUpdate, setLastUpdate] = useState(Date.now());
 
-  // Load real-time attendance data from localStorage
+  // Fetch attendance data from backend API
   useEffect(() => {
-    const loadAttendanceData = () => {
-      const savedStudents = JSON.parse(localStorage.getItem('students')) || [];
-      const savedSections = JSON.parse(localStorage.getItem('subjects')) || [];
-      const savedAttendance = JSON.parse(localStorage.getItem('attendanceRecords')) || [];
-      
-      setStudents(savedStudents);
-      setSections(savedSections);
-      
-      // Filter attendance records for the selected date
-      const todaysAttendance = savedAttendance.filter(record => 
-        record.date === selectedDate
-      );
-      
-      // Map attendance records to the format expected by the component
-      const formattedAttendance = todaysAttendance.map(record => ({
-        id: record.id,
-        name: record.name,
-        studentId: record.studentId,
-        section: record.section,
-        subject: record.subject,
-        status: record.status,
-        timestamp: record.timestamp,
-        date: record.date,
-        recordedAt: record.recordedAt // Keep the original timestamp for sorting
-      }));
-      
-      // Sort by most recent first
-      formattedAttendance.sort((a, b) => new Date(b.recordedAt) - new Date(a.recordedAt));
-      
-      setAttendanceData(formattedAttendance);
-      setLastUpdate(Date.now());
-    };
-
-    // Initial load
-    loadAttendanceData();
-
-    // Set up real-time polling to check for new attendance records
-    const interval = setInterval(loadAttendanceData, 2000); // Check every 2 seconds
-
-    return () => clearInterval(interval);
-  }, [selectedDate]);
-
-  // Listen for localStorage changes (for real-time updates from FaceRecognition)
-  useEffect(() => {
-    const handleStorageChange = (e) => {
-      if (e.key === 'attendanceRecords') {
-        // Reload attendance data when records are updated
-        const savedAttendance = JSON.parse(e.newValue || '[]');
-        const todaysAttendance = savedAttendance.filter(record => 
-          record.date === selectedDate
-        );
-        
-        const formattedAttendance = todaysAttendance.map(record => ({
-          id: record.id,
-          name: record.name,
-          studentId: record.studentId,
-          section: record.section,
-          subject: record.subject,
-          status: record.status,
-          timestamp: record.timestamp,
-          date: record.date,
-          recordedAt: record.recordedAt
-        }));
-        
-        formattedAttendance.sort((a, b) => new Date(b.recordedAt) - new Date(a.recordedAt));
-        setAttendanceData(formattedAttendance);
+    const fetchAttendanceData = async () => {
+      try {
+        let url = `/api/attendance?date=${selectedDate}`;
+        if (selectedSection) url += `&section=${encodeURIComponent(selectedSection)}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Failed to fetch attendance records');
+        const data = await res.json();
+        // Sort by most recent first
+        data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        setAttendanceData(data);
         setLastUpdate(Date.now());
+      } catch (err) {
+        setAttendanceData([]);
       }
     };
 
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [selectedDate]);
+    fetchAttendanceData();
+    const interval = setInterval(fetchAttendanceData, 2000); // Poll every 2 seconds
+
+    return () => clearInterval(interval);
+  }, [selectedDate, selectedSection]);
+
+  // Fetch sections from backend API
+  useEffect(() => {
+    const fetchSections = async () => {
+      try {
+        const res = await fetch('/api/sections');
+        if (!res.ok) throw new Error('Failed to fetch sections');
+        const data = await res.json();
+        setSections(data);
+      } catch {
+        setSections([]);
+      }
+    };
+    fetchSections();
+  }, []);
+
+  // Fetch students from backend API (if needed)
+  useEffect(() => {
+    const fetchStudents = async () => {
+      try {
+        const res = await fetch('/api/students');
+        if (!res.ok) throw new Error('Failed to fetch students');
+        const data = await res.json();
+        setStudents(data);
+      } catch {
+        setStudents([]);
+      }
+    };
+    fetchStudents();
+  }, []);
 
   // Generate current time for real-time updates
   const getCurrentTime = () => {
@@ -104,104 +82,51 @@ const ManageAttendance = () => {
     return attendanceData.filter(record => {
       const matchesSection = !selectedSection || record.section === selectedSection;
       const matchesSearch = !searchTerm || 
-        record.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.studentId.toLowerCase().includes(searchTerm.toLowerCase());
-      
+        (record.name && record.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (record.studentId && record.studentId.toLowerCase().includes(searchTerm.toLowerCase()));
       return matchesSection && matchesSearch;
     });
   }, [attendanceData, selectedSection, searchTerm]);
 
   // Calculate summary statistics
   const summary = useMemo(() => {
-    const present = filteredAttendance.filter(r => r.status === 'Present').length;
-    const late = filteredAttendance.filter(r => r.status === 'Late').length;
-    const absent = filteredAttendance.filter(r => r.status === 'Absent').length;
-    
+    const present = filteredAttendance.filter(r => r.status && r.status.toLowerCase() === 'present').length;
+    const late = filteredAttendance.filter(r => r.status && r.status.toLowerCase() === 'late').length;
+    const absent = filteredAttendance.filter(r => r.status && r.status.toLowerCase() === 'absent').length;
     return { present, late, absent, total: present + late + absent };
   }, [filteredAttendance]);
 
-  // Handle manual status change (updates both local state and localStorage)
-  const handleStatusChange = (studentId, newStatus) => {
-    const currentTime = getCurrentTime();
-    const currentDateTime = new Date().toISOString();
-    
-    // Update local state
-    setAttendanceData(prev => 
-      prev.map(record => 
-        record.id === studentId 
-          ? { 
-              ...record, 
-              status: newStatus, 
-              timestamp: newStatus !== 'Absent' ? currentTime : '-',
-              recordedAt: currentDateTime
-            }
-          : record
-      )
-    );
-    
-    // Update localStorage
-    const savedAttendance = JSON.parse(localStorage.getItem('attendanceRecords')) || [];
-    const updatedAttendance = savedAttendance.map(record => 
-      record.id === studentId && record.date === selectedDate
-        ? { 
-            ...record, 
-            status: newStatus, 
-            timestamp: newStatus !== 'Absent' ? currentTime : '-',
-            recordedAt: currentDateTime
-          }
-        : record
-    );
-    
-    localStorage.setItem('attendanceRecords', JSON.stringify(updatedAttendance));
-    setLastUpdate(Date.now());
-  };
-
-  // Delete attendance record
-  const handleDeleteRecord = (recordId) => {
-    const recordToDelete = attendanceData.find(record => record.id === recordId);
-    const studentName = recordToDelete ? recordToDelete.name : 'Unknown Student';
-    
-    if (window.confirm(`Are you sure you want to delete the attendance record for ${studentName}?`)) {
-      // Update local state
-      setAttendanceData(prev => prev.filter(record => record.id !== recordId));
-      
-      // Update localStorage
-      const savedAttendance = JSON.parse(localStorage.getItem('attendanceRecords')) || [];
-      const updatedAttendance = savedAttendance.filter(record => record.id !== recordId);
-      localStorage.setItem('attendanceRecords', JSON.stringify(updatedAttendance));
+  // Handle manual status change (updates backend)
+  const handleStatusChange = async (recordId, newStatus) => {
+    try {
+      const res = await fetch(`/api/attendance/${recordId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (!res.ok) throw new Error('Failed to update status');
       setLastUpdate(Date.now());
-      
-      // Show success message
-      alert(`✅ Attendance record for ${studentName} has been deleted.`);
+      // Optionally, you can refetch attendance data here or rely on polling
+    } catch (err) {
+      alert('Failed to update attendance status.');
     }
   };
 
-  // Manual attendance entry for students not yet recorded
-  // const addManualAttendance = (student, status) => {
-  //   const currentTime = getCurrentTime();
-  //   const currentDateTime = new Date().toISOString();
-  //   
-  //   const newRecord = {
-  //     id: `${student.id}_${selectedDate}_${Date.now()}`,
-  //     studentId: student.id,
-  //     name: student.name,
-  //     section: student.section,
-  //     subject: student.subject,
-  //     status: status,
-  //     timestamp: status !== 'Absent' ? currentTime : '-',
-  //     date: selectedDate,
-  //     recordedAt: currentDateTime
-  //   };
-  //   
-  //   // Update local state
-  //   setAttendanceData(prev => [newRecord, ...prev]);
-  //   
-  //   // Update localStorage
-  //   const savedAttendance = JSON.parse(localStorage.getItem('attendanceRecords')) || [];
-  //   savedAttendance.push(newRecord);
-  //   localStorage.setItem('attendanceRecords', JSON.stringify(savedAttendance));
-  //   setLastUpdate(Date.now());
-  // };
+  // Delete attendance record (updates backend)
+  const handleDeleteRecord = async (recordId) => {
+    const recordToDelete = attendanceData.find(record => record._id === recordId || record.id === recordId);
+    const studentName = recordToDelete ? recordToDelete.name : 'Unknown Student';
+
+    if (window.confirm(`Are you sure you want to delete the attendance record for ${studentName}?`)) {
+      try {
+        const res = await fetch(`/api/attendance/${recordId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Failed to delete record');
+        setLastUpdate(Date.now());
+      } catch (err) {
+        alert('Failed to delete attendance record.');
+      }
+    }
+  };
 
   // Export functionality
   const handleExport = () => {
@@ -209,7 +134,6 @@ const ManageAttendance = () => {
       `${record.name},${record.studentId},${record.section},${record.status},${record.timestamp}`
     );
     const csvContent = 'Name,Student ID,Section,Status,Timestamp\n' + csvData.join('\n');
-    
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -241,9 +165,7 @@ const ManageAttendance = () => {
             ← Back to Dashboard
           </button>
         </div>
-        <p className="subtext">
-          
-        </p>
+        <p className="subtext"></p>
         <div className="real-time-status">
           <div className="status-indicator live">
             <span className="status-dot"></span>
@@ -281,8 +203,8 @@ const ManageAttendance = () => {
           >
             <option value="">All Sections</option>
             {sections.map((section, index) => (
-              <option key={index} value={section.sectionName}>
-                {section.sectionName}
+              <option key={index} value={section.sectionName || section.name || section._id}>
+                {section.sectionName || section.name || section._id}
               </option>
             ))}
           </select>
@@ -367,11 +289,11 @@ const ManageAttendance = () => {
               {filteredAttendance.length > 0 ? (
                 filteredAttendance.map((record, index) => {
                   // Check if record is new (within last 30 seconds)
-                  const isNew = record.recordedAt && 
-                    (Date.now() - new Date(record.recordedAt).getTime()) < 30000;
+                  const isNew = record.timestamp && 
+                    (Date.now() - new Date(record.timestamp).getTime()) < 30000;
                   
                   return (
-                    <tr key={record.id} className={isNew ? 'new-record' : ''}>
+                    <tr key={record._id || record.id || index} className={isNew ? 'new-record' : ''}>
                       <td>
                         <div className="name-cell">
                           {record.name}
@@ -382,13 +304,13 @@ const ManageAttendance = () => {
                       <td>{record.section}</td>
                       <td>{record.subject}</td>
                       <td>
-                        <span className={`status-badge status-${record.status.toLowerCase()}`}>
+                        <span className={`status-badge status-${(record.status || '').toLowerCase()}`}>
                           {record.status}
                         </span>
                       </td>
                       <td>
                         <div className="timestamp-cell">
-                          {record.timestamp}
+                          {record.timestamp ? new Date(record.timestamp).toLocaleTimeString() : '-'}
                           {isNew && <span className="live-indicator">🔴 LIVE</span>}
                         </div>
                       </td>
@@ -396,7 +318,7 @@ const ManageAttendance = () => {
                         <div className="action-buttons">
                           <select
                             value={record.status}
-                            onChange={(e) => handleStatusChange(record.id, e.target.value)}
+                            onChange={(e) => handleStatusChange(record._id || record.id, e.target.value)}
                             className="status-select"
                           >
                             <option value="Present">Present</option>
@@ -404,7 +326,7 @@ const ManageAttendance = () => {
                             <option value="Absent">Absent</option>
                           </select>
                           <button
-                            onClick={() => handleDeleteRecord(record.id)}
+                            onClick={() => handleDeleteRecord(record._id || record.id)}
                             className="delete-button"
                             title="Delete Record"
                           >

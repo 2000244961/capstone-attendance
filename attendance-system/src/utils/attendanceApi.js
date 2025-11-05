@@ -3,9 +3,14 @@ import axios from 'axios';
 // Make sure this matches your backend API endpoint and port!
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:7000/api/attendance';
 
-export const fetchAttendance = async () => {
-  // If your backend uses /api/attendance/list, change to `${API_URL}/list`
-  const res = await axios.get(API_URL);
+// Fetch attendance records with optional date and section filters
+export const fetchAttendance = async ({ date, section } = {}) => {
+  let url = API_URL;
+  const params = [];
+  if (date) params.push(`date=${encodeURIComponent(date)}`);
+  if (section) params.push(`section=${encodeURIComponent(section)}`);
+  if (params.length > 0) url += `?${params.join('&')}`;
+  const res = await axios.get(url);
   return res.data;
 };
 

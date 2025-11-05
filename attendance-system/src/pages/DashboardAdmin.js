@@ -17,7 +17,15 @@ import { deleteUser as apiDeleteUser } from '../api/userApi';
 import { fetchTodayAttendanceSummaryAll, fetchAttendanceBySection } from '../api/attendanceApi';
 import axios from 'axios';
 
-
+// Helper to fetch attendance by month
+async function fetchAttendanceByMonth(month) {
+  if (!month) return [];
+  // month format: YYYY-MM
+  const url = `/api/attendance/sections?month=${month}`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  return await res.json();
+}
 
 // Helper to fetch user info by id
 async function fetchUserName(userId) {
@@ -33,9 +41,17 @@ async function fetchUserName(userId) {
 
 
 function DashboardAdmin() {
+  // Month selection for attendance reports
+  const [reportMonth, setReportMonth] = useState("");
+  // Section attendance for month
+  useEffect(() => {
+    if (!reportMonth) return;
+    fetchAttendanceByMonth(reportMonth).then(data => {
+      setSectionAttendance(Array.isArray(data) ? data : []);
+    }).catch(() => setSectionAttendance([]));
+  }, [reportMonth]);
   const [adminMessageFile, setAdminMessageFile] = useState(null);
   const { setUser } = useUser();
-  // Inbox view: 'received' or 'sent'
   const [inboxView, setInboxView] = useState('received');
   // Hamburger menu state for sidebar
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -1093,20 +1109,21 @@ setAnnouncements(res.data);
             <div className="dashboard-reports-section">
               <h2>Reports</h2>
               <div style={{marginBottom: 18, display: 'flex', alignItems: 'center', gap: 16}}>
-                <label htmlFor="report-date" style={{fontWeight: 600}}>Select Date:</label>
+                <label htmlFor="report-month" style={{fontWeight: 600}}>Select Month:</label>
                 <input
-                  id="report-date"
-                  type="date"
-                  value={reportDate}
-                  onChange={e => setReportDate(e.target.value)}
+                  id="report-month"
+                  type="month"
+                  value={reportMonth}
+                  onChange={e => setReportMonth(e.target.value)}
                   style={{padding: '6px 12px', borderRadius: 6, border: '1px solid #b6d0f7', fontWeight: 500}}
-                  max={new Date().toISOString().slice(0, 10)}
+                  max={new Date().toISOString().slice(0, 7)}
                 />
               </div>
               <button
                 className="dashboard-btn primary"
                 style={{marginBottom: 12}}
                 onClick={() => {
+                  console.log('Section Attendance Data:', sectionAttendance);
                   if (!sectionAttendance || sectionAttendance.length === 0) return;
                   // Prepare worksheet data
                   const wsData = [
@@ -1120,7 +1137,7 @@ setAnnouncements(res.data);
                   const ws = XLSX.utils.aoa_to_sheet(wsData);
                   const wb = XLSX.utils.book_new();
                   XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
-                  XLSX.writeFile(wb, `section-attendance-${reportDate || 'date'}.xlsx`);
+                  XLSX.writeFile(wb, `section-attendance-${reportMonth || 'month'}.xlsx`);
                 }}
               >Export to Excel</button>
               <div className="reports-panel">
