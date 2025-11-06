@@ -15,7 +15,7 @@ const io = socketIo(server, {
   }
 });
 app.set('io', io); // Make io accessible in routes
-const PORT = 7000;
+const PORT = process.env.PORT || 7000;
 
 
 app.use(cors());
@@ -32,7 +32,7 @@ app.get('/uploads/:filename', (req, res) => {
 });
 
 // MongoDB connection
-mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/attendance', {
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/attendance', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
