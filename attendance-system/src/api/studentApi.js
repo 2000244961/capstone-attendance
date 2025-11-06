@@ -1,13 +1,13 @@
 // Dummy studentApi for build
 // Real studentApi for backend connection
 export async function fetchStudents() {
-	const res = await fetch('/api/students/list');
+	const res = await fetch(`${process.env.REACT_APP_API_URL}/api/students/list`);
 	if (!res.ok) throw new Error('Failed to fetch students');
 	return await res.json();
 }
 
 export async function addStudent(student) {
-	const res = await fetch('/api/students/add', {
+	const res = await fetch(`${process.env.REACT_APP_API_URL}/api/students/add`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(student)
@@ -17,7 +17,7 @@ export async function addStudent(student) {
 }
 
 export async function updateStudent(student) {
-	const res = await fetch(`/api/students/update/${student._id}`, {
+	const res = await fetch(`${process.env.REACT_APP_API_URL}/api/students/update/${student._id}`, {
 		method: 'PUT',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(student)
@@ -27,7 +27,7 @@ export async function updateStudent(student) {
 }
 
 export async function deleteStudent(id) {
-	const res = await fetch(`/api/students/delete/${id}`, {
+	const res = await fetch(`${process.env.REACT_APP_API_URL}/api/students/delete/${id}`, {
 		method: 'DELETE'
 	});
 	if (!res.ok) throw new Error('Failed to delete student');

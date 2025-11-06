@@ -5,7 +5,7 @@ export async function sendAdminMessageToMany({ senderId, senderRole, recipientGr
     // Send to specific users
     // Fetch user info for each id (to get role/type)
     const userResults = await Promise.all(recipientIds.map(async id => {
-      const res = await fetch(`/api/user/${id}`);
+  const res = await fetch(`${process.env.REACT_APP_API_URL}/api/user/${id}`);
       if (!res.ok) return null;
       return await res.json();
     }));
@@ -13,13 +13,13 @@ export async function sendAdminMessageToMany({ senderId, senderRole, recipientGr
   } else {
     // Fetch all teachers/parents as needed
     if (recipientGroup === 'teachers' || recipientGroup === 'both') {
-      const res = await fetch('/api/user/list?type=teacher');
+  const res = await fetch(`${process.env.REACT_APP_API_URL}/api/user/list?type=teacher`);
       if (!res.ok) throw new Error('Failed to fetch teachers');
       const { users: teachers } = await res.json();
       users = users.concat(teachers);
     }
     if (recipientGroup === 'parents' || recipientGroup === 'both') {
-      const res = await fetch('/api/user/list?type=parent');
+  const res = await fetch(`${process.env.REACT_APP_API_URL}/api/user/list?type=parent`);
       if (!res.ok) throw new Error('Failed to fetch parents');
       const { users: parents } = await res.json();
       users = users.concat(parents);
@@ -36,7 +36,7 @@ export async function sendAdminMessageToMany({ senderId, senderRole, recipientGr
       content,                  // Announcement body/message
       fileUrl: fileUrl || null
     };
-    const res = await fetch('/api/message/send', {
+  const res = await fetch(`${process.env.REACT_APP_API_URL}/api/message/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -49,7 +49,7 @@ export async function sendAdminMessageToMany({ senderId, senderRole, recipientGr
 
 // Delete a message by ID
 export async function deleteMessage(messageId) {
-  const res = await fetch(`/api/message/${messageId}`, {
+  const res = await fetch(`${process.env.REACT_APP_API_URL}/api/message/${messageId}`, {
     method: 'DELETE'
   });
   if (!res.ok) throw new Error('Failed to delete message');
@@ -58,7 +58,7 @@ export async function deleteMessage(messageId) {
 
 // Update message status (approve/decline)
 export async function updateMessageStatus(messageId, status) {
-  const res = await fetch(`/api/message/${messageId}/status`, {
+  const res = await fetch(`${process.env.REACT_APP_API_URL}/api/message/${messageId}/status`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status })
@@ -70,13 +70,13 @@ export async function updateMessageStatus(messageId, status) {
 // API helpers for inbox and excuse letter features
 
 export async function fetchInbox(userId, role = 'teacher') {
-  const res = await fetch(`/api/message/inbox/${userId}?role=${role}`);
+  const res = await fetch(`${process.env.REACT_APP_API_URL}/api/message/inbox/${userId}?role=${role}`);
   if (!res.ok) throw new Error('Failed to fetch inbox');
   return await res.json();
 }
 
 export async function fetchSentMessages(userId) {
-  const res = await fetch(`/api/message/sent/${userId}`);
+  const res = await fetch(`${process.env.REACT_APP_API_URL}/api/message/sent/${userId}`);
   if (!res.ok) throw new Error('Failed to fetch sent messages');
   return await res.json();
 }
@@ -98,7 +98,7 @@ export async function sendExcuseLetter(data, isFormData = false) {
       excuseDate: data.excuseDate
     });
   }
-  const res = await fetch('/api/message/send', options);
+  const res = await fetch(`${process.env.REACT_APP_API_URL}/api/message/send`, options);
   if (!res.ok) throw new Error('Failed to send excuse letter');
   return await res.json();
 }

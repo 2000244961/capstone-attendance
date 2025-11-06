@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Make sure this matches your backend API endpoint and port!
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:7000/api/attendance';
+const API_URL = process.env.REACT_APP_API_URL || 'https://attendance-backend-1-63x9.onrender.com/api/attendance';
 
 // Fetch attendance records with optional date and section filters
 export const fetchAttendance = async ({ date, section } = {}) => {
