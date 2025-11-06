@@ -58,7 +58,7 @@ function DashboardAdmin() {
   // Announcements state (persisted in localStorage)
   const [announcements, setAnnouncements] = useState([]);
     useEffect(() => {
-  axios.get('http://localhost:7000/api/announcements')
+  axios.get(`${process.env.REACT_APP_API_URL}/api/announcements`)
     .then(res => setAnnouncements(res.data))
     .catch(() => setAnnouncements([]));
 }, []);
@@ -203,7 +203,7 @@ function DashboardAdmin() {
         setAdminMessageSending(false);
         return;
       }
-      await axios.post('http://localhost:7000/api/announcements', {
+  await axios.post(`${process.env.REACT_APP_API_URL}/api/announcements`, {
   title: adminMessageTitle,
   content: adminMessageContent,
   audience: adminMessageRecipient,
@@ -211,7 +211,7 @@ function DashboardAdmin() {
   fileUrl
 });
 // Fetch updated announcements from backend
-const res = await axios.get('http://localhost:7000/api/announcements');
+const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/announcements`);
 setAnnouncements(res.data);
       let recipientGroups = [];
       if (adminMessageRecipient === 'both') recipientGroups = ['teachers', 'parents'];

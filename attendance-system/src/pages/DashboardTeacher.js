@@ -91,7 +91,7 @@ useEffect(() => {
     // Fetch announcements from backend
     const fetchAnnouncements = async () => {
         try {
-            const res = await axios.get('http://localhost:7000/api/announcements');
+			const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/announcements`);
             // Filter announcements for teacher audience (same logic as before)
             const filtered = (res.data || []).filter(a =>
                 a.audience === 'teacher' ||

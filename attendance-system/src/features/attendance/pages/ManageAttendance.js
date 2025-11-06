@@ -93,7 +93,7 @@ const ManageAttendance = () => {
         loadAttendance();
 
         // Socket.IO setup for real-time updates
-        const socket = io('http://localhost:7000');
+    const socket = io(process.env.REACT_APP_API_URL);
         socket.on('attendance:new', (newRecord) => {
             if (
                 new Date(newRecord.date).toISOString().slice(0, 10) === selectedDate &&

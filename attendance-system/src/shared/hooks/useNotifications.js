@@ -12,7 +12,7 @@ export function useNotifications({ userId, userRole }) {
     if (userId) {
       // API-based notifications
       axios
-        .get(`http://localhost:7000/api/notifications/${userId}`)
+  .get(`${process.env.REACT_APP_API_URL}/api/notifications/${userId}`)
         .then((res) => setNotifications(res.data))
         .catch(() => setNotifications([]));
     } else if (userRole) {
@@ -81,7 +81,7 @@ export function useNotifications({ userId, userRole }) {
     );
     // API update if userId
     if (userId) {
-      axios.patch(`http://localhost:7000/api/notifications/${id}/read`);
+  axios.patch(`${process.env.REACT_APP_API_URL}/api/notifications/${id}/read`);
     }
   };
 
@@ -91,7 +91,7 @@ export function useNotifications({ userId, userRole }) {
     );
     if (userId) {
       notifications.forEach((n) => {
-        if (!n.read) axios.patch(`http://localhost:7000/api/notifications/${n._id}/read`);
+  if (!n.read) axios.patch(`${process.env.REACT_APP_API_URL}/api/notifications/${n._id}/read`);
       });
     }
   };
@@ -101,7 +101,7 @@ export function useNotifications({ userId, userRole }) {
       prev.filter((n) => (n._id || n.id) !== id)
     );
     if (userId) {
-      axios.delete(`http://localhost:7000/api/notifications/${id}`);
+  axios.delete(`${process.env.REACT_APP_API_URL}/api/notifications/${id}`);
     }
   };
 
