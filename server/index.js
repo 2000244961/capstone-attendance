@@ -10,7 +10,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: '*',
+    origin: ['https://attendance-backend-4-gl1f.onrender.com/','http://localhost:7000'],
     methods: ['GET', 'POST']
   }
 });
