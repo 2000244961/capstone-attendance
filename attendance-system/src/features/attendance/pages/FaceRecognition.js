@@ -18,8 +18,8 @@ function FaceRecognition() {
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [webcamReady, setWebcamReady] = useState(false);
   const [webcamError, setWebcamError] = useState(null);
-  const [sectionList, setSectionList] = useState([]);
-  const [subjectList, setSubjectList] = useState([]);
+  const [sectionList, setSectionList] = useState(['Test Section']);
+  const [subjectList, setSubjectList] = useState(['Test Subject']);
   const [selectedSection, setSelectedSection] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('');
   const [scannedStudents, setScannedStudents] = useState([]); // Track scanned studentIds
@@ -60,8 +60,10 @@ function FaceRecognition() {
           assignedSubjects = assignedSubjects.concat(profile.subjects.map(s => s.subjectName || s.type || s.name || s).filter(Boolean));
         }
       }
-      setSectionList(assignedSections.length ? [...new Set(assignedSections)] : allSections);
-      setSubjectList(assignedSubjects.length ? [...new Set(assignedSubjects)] : allSubjects);
+  const fallbackSections = allSections.length ? allSections : ['Test Section'];
+  const fallbackSubjects = allSubjects.length ? allSubjects : ['Test Subject'];
+  setSectionList(assignedSections.length ? [...new Set(assignedSections)] : fallbackSections);
+  setSubjectList(assignedSubjects.length ? [...new Set(assignedSubjects)] : fallbackSubjects);
       // Students
       try {
         const data = await fetchStudents();
