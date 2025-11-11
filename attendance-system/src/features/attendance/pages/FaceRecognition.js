@@ -1,3 +1,4 @@
+import React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { fetchSubjectSections } from './subjectSectionApi';
 import { useNavigate } from 'react-router-dom';
