@@ -17,15 +17,29 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: ['https://attendance-backend-4-gl1f.onrender.com/','http://localhost','*'],
-    methods: ['GET', 'POST']
+    origin: [
+      'https://attendance-backend-4-gl1f.onrender.com/',
+      'http://localhost',
+      '*',
+      'https://stirring-youtiao-750d22.netlify.app'
+    ],
+    methods: ['GET', 'POST'],
+    credentials: true
   }
 });
 app.set('io', io); // Make io accessible in routes
 const PORT = process.env.PORT || 7000;
 
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://attendance-backend-4-gl1f.onrender.com/',
+    'http://localhost',
+    '*',
+    'https://stirring-youtiao-750d22.netlify.app'
+  ],
+  credentials: true
+}));
 app.use(express.json());
 // Serve uploads folder as static files, but force download for all files
 const path = require('path');
