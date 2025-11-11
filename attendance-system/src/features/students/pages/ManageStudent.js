@@ -8,7 +8,6 @@ import { loadFaceApiModels, areModelsLoaded } from '../../shared/faceApiLoader';
 import { fetchStudents, addStudent, updateStudent, deleteStudent } from './studentApi';
 import { fetchSubjectSections } from './subjectSectionApi';
 import '../styles/ManageStudent.css';
-import { loadFaceApiModels, areModelsLoaded } from '../../shared/faceApiLoader';
 
 // Add processFaceDetection after all imports
 async function processFaceDetection(photo) {
