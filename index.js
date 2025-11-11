@@ -1,4 +1,11 @@
 // Basic Express server with MongoDB connection using mongoose
+
+// DEBUG: Log userRoutes import before anything else
+const userRoutes = require('./routes/user');
+console.log('DEBUG userRoutes:', userRoutes);
+console.log('DEBUG userRoutes.router:', userRoutes.router);
+console.log('DEBUG typeof userRoutes.router:', typeof userRoutes.router);
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -10,15 +17,50 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: ['https://attendance-backend-4-gl1f.onrender.com/','http://localhost','*'],
-    methods: ['GET', 'POST']
+    origin: [
+      'https://stirring-youtiao-750d22.netlify.app',
+      'http://localhost:3000',
+      'http://localhost:5000',
+      'https://capstone-attendance-4.onrender.com'
+    ],
+    methods: ['GET', 'POST'],
+    credentials: true
   }
 });
 app.set('io', io); // Make io accessible in routes
 const PORT = process.env.PORT || 7000;
 
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://stirring-youtiao-750d22.netlify.app',
+    'http://localhost:3000',
+    'http://localhost:5000',
+    'https://capstone-attendance-4.onrender.com'
+  ],
+  credentials: true
+// Fix for socket.io CORS preflight (polling transport)
+
+app.options('/socket.io/*', cors());
+
+// Set Access-Control-Allow-Origin for socket.io polling requests
+app.use(function(req, res, next) {
+  if (req.path.startsWith('/socket.io/')) {
+    const allowedOrigins = [
+      'https://stirring-youtiao-750d22.netlify.app',
+      'http://localhost:3000',
+      'http://localhost:5000',
+      'https://capstone-attendance-4.onrender.com'
+    ];
+    const origin = req.headers.origin;
+    if (allowedOrigins.includes(origin)) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Access-Control-Allow-Credentials', 'true');
+    }
+  }
+  next();
+});
+}));
 app.use(express.json());
 // Serve uploads folder as static files, but force download for all files
 const path = require('path');
@@ -76,28 +118,28 @@ app.get('/', (req, res) => {
 
 // Enable attendance and user routes for testing
 // Pass io to attendance routes for emitting events
-app.use('/api/attendance', (req, res, next) => {
-  req.io = io;
-  next();
-}, require('./routes/attendance'));
-// Mount debug attendance route
-app.use('/api/attendance', require('./routes/attendanceDebug'));
-const userRoutes = require('./routes/user');
-app.use('/api/user', userRoutes);
-// Mount /api/announcement route
+// app.use('/api/attendance', (req, res, next) => {
+//   req.io = io;
+//   next();
+// }, require('./routes/attendance'));
+// // Mount debug attendance route
+// app.use('/api/attendance', require('./routes/attendanceDebug'));
+
+app.use('/api/user', userRoutes.router);
 if (userRoutes.announcementRouter) {
   app.use('/api/announcement', userRoutes.announcementRouter);
 }
 app.use('/api/students', require('./routes/student'));
 app.use('/api/subjectSection', require('./routes/subjectSection'));
-app.use('/api/message', require('./routes/message'));
+// app.use('/api/message', require('./routes/message'));
 
 //notification routes
-const notificationRoutes = require('./routes/notification');
-app.use('/api/notifications', notificationRoutes);
-
-const announcementRoutes = require('./routes/announcement');
-app.use('/api/announcements', announcementRoutes);
+const notificationRoutes = require('./routes/notification2');
+console.log('DEBUG notificationRoutes:', notificationRoutes);
+const announcementRoutes = require('./routes/announcement2');
+console.log('DEBUG announcementRoutes:', announcementRoutes);
+// app.use('/api/notifications', notificationRoutes);
+// app.use('/api/announcements', announcementRoutes);
 
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
