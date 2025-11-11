@@ -2,7 +2,7 @@
 
 // Fetch attendance records with optional date and section filters
 export async function fetchAttendance({ date, section } = {}) {
-  let url = '/api/attendance';
+  let url = `${process.env.REACT_APP_API_URL}/api/attendance`;
   const params = [];
   if (date) params.push(`date=${encodeURIComponent(date)}`);
   if (section) params.push(`section=${encodeURIComponent(section)}`);
@@ -14,13 +14,13 @@ export async function fetchAttendance({ date, section } = {}) {
 }
 
 export async function deleteAttendance(id) {
-  const response = await fetch(`/api/attendance/${id}`, { method: 'DELETE' });
+  const response = await fetch(`${process.env.REACT_APP_API_URL}/api/attendance/${id}`, { method: 'DELETE' });
   if (!response.ok) throw new Error('Failed to delete attendance');
   return response.json();
 }
 
 export async function updateAttendance(id, data) {
-  const response = await fetch(`/api/attendance/${id}`, {
+  const response = await fetch(`${process.env.REACT_APP_API_URL}/api/attendance/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
@@ -30,7 +30,7 @@ export async function updateAttendance(id, data) {
 }
 
 export async function addAttendance(record) {
-  const response = await fetch('/api/attendance', {
+  const response = await fetch(`${process.env.REACT_APP_API_URL}/api/attendance`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(record)

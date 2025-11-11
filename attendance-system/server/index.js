@@ -1,4 +1,11 @@
 // Basic Express server with MongoDB connection using mongoose
+
+// DEBUG: Log userRoutes import before anything else
+const userRoutes = require('./routes/user');
+console.log('DEBUG userRoutes:', userRoutes);
+console.log('DEBUG userRoutes.router:', userRoutes.router);
+console.log('DEBUG typeof userRoutes.router:', typeof userRoutes.router);
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -76,28 +83,28 @@ app.get('/', (req, res) => {
 
 // Enable attendance and user routes for testing
 // Pass io to attendance routes for emitting events
-app.use('/api/attendance', (req, res, next) => {
-  req.io = io;
-  next();
-}, require('./routes/attendance'));
-// Mount debug attendance route
-app.use('/api/attendance', require('./routes/attendanceDebug'));
-const userRoutes = require('./routes/user');
-app.use('/api/user', userRoutes);
-// Mount /api/announcement route
+// app.use('/api/attendance', (req, res, next) => {
+//   req.io = io;
+//   next();
+// }, require('./routes/attendance'));
+// // Mount debug attendance route
+// app.use('/api/attendance', require('./routes/attendanceDebug'));
+
+app.use('/api/user', userRoutes.router);
 if (userRoutes.announcementRouter) {
   app.use('/api/announcement', userRoutes.announcementRouter);
 }
 app.use('/api/students', require('./routes/student'));
 app.use('/api/subjectSection', require('./routes/subjectSection'));
-app.use('/api/message', require('./routes/message'));
+// app.use('/api/message', require('./routes/message'));
 
 //notification routes
-const notificationRoutes = require('./routes/notification');
-app.use('/api/notifications', notificationRoutes);
-
-const announcementRoutes = require('./routes/announcement');
-app.use('/api/announcements', announcementRoutes);
+const notificationRoutes = require('./routes/notification2');
+console.log('DEBUG notificationRoutes:', notificationRoutes);
+const announcementRoutes = require('./routes/announcement2');
+console.log('DEBUG announcementRoutes:', announcementRoutes);
+// app.use('/api/notifications', notificationRoutes);
+// app.use('/api/announcements', announcementRoutes);
 
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

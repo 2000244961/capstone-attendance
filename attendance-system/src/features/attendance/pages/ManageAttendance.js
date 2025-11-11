@@ -169,7 +169,7 @@ const ManageAttendance = () => {
     const handleDeleteAllAttendanceForStudent = async (studentId, studentName) => {
         if (window.confirm(`Are you sure you want to delete ALL attendance records for ${studentName}?`)) {
             try {
-                const response = await fetch(`/api/attendance/deleteByStudent/${studentId}`, {
+                const response = await fetch(`${process.env.REACT_APP_API_URL}/api/attendance/deleteByStudent/${studentId}`, {
                     method: 'DELETE',
                 });
                 if (response.ok) {

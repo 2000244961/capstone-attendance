@@ -1,14 +1,13 @@
+const express = require('express');
 // Minimal announcement route for frontend compatibility
 const announcementList = [];
-const announcementRouter = require('express').Router();
+const announcementRouter = express.Router();
 announcementRouter.get('/', (req, res) => {
   res.json({ announcements: announcementList });
 });
 
-// Export announcementRouter for use in index.js
-module.exports.announcementRouter = announcementRouter;
-const express = require('express');
 const router = express.Router();
+const User = require('../models/User');
 
 // List users endpoint (move above /:id)
 router.get('/list', async (req, res) => {
@@ -56,7 +55,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 // (Removed misplaced spread logic)
-const User = require('../models/User');
+
 
 // Auto-approve all parent users on server startup
 User.updateMany({ type: 'parent', approved: false }, { $set: { approved: true } })
@@ -111,19 +110,6 @@ router.delete('/delete/:id', async (req, res) => {
   }
 });
 
-// List users endpoint
-router.get('/list', async (req, res) => {
-  try {
-    const { type } = req.query;
-    const query = type ? { type } : {};
-    const users = await User.find(query);
-    console.log('User list response:', users);
-    res.json({ users });
-  } catch (err) {
-    console.error('User list error:', err);
-    res.status(500).json({ message: 'Failed to fetch users.' });
-  }
-});
 
 // Update user endpoint
 router.post('/update', async (req, res) => {
@@ -302,4 +288,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-module.exports = router;
+module.exports = {
+  router,
+  announcementRouter
+};

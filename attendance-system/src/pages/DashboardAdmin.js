@@ -21,7 +21,7 @@ import axios from 'axios';
 async function fetchAttendanceByMonth(month) {
   if (!month) return [];
   // month format: YYYY-MM
-  const url = `/api/attendance/sections?month=${month}`;
+  const url = `${process.env.REACT_APP_API_URL}/api/attendance/sections?month=${month}`;
   const res = await fetch(url);
   if (!res.ok) return [];
   return await res.json();
@@ -30,7 +30,7 @@ async function fetchAttendanceByMonth(month) {
 // Helper to fetch user info by id
 async function fetchUserName(userId) {
   try {
-    const res = await fetch(`/api/user/${userId}`);
+  const res = await fetch(`${process.env.REACT_APP_API_URL}/api/user/${userId}`);
     if (!res.ok) return userId;
     const user = await res.json();
     return user.fullName || user.username || user.email || userId;
@@ -412,7 +412,7 @@ setAnnouncements(res.data);
         };
       }
       // Send to backend
-      const res = await fetch('/api/user/register', {
+  const res = await fetch(`${process.env.REACT_APP_API_URL}/api/user/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -492,7 +492,7 @@ setAnnouncements(res.data);
   const fetchUsers = async () => {
     try {
       // Fetch teachers and parents from user API
-      const userRes = await fetch('/api/user/list');
+  const userRes = await fetch(`${process.env.REACT_APP_API_URL}/api/user/list`);
       if (!userRes.ok) throw new Error('Failed to fetch users');
       const userData = await userRes.json();
       const users = userData.users || [];
@@ -504,7 +504,7 @@ setAnnouncements(res.data);
         else if (u.type === 'parent') counts.parent++;
       });
       // Fetch students from student API
-      const studentRes = await fetch('/api/students/list');
+  const studentRes = await fetch(`${process.env.REACT_APP_API_URL}/api/students/list`);
       if (studentRes.ok) {
         const studentData = await studentRes.json();
         // studentData can be array or {students: []}

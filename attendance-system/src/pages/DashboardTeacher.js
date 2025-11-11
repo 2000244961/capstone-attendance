@@ -54,7 +54,7 @@ function TodayAttendanceSummary({ studentsInSections }) {
 // Helper to fetch user info by id
 async function fetchUserName(userId) {
 	try {
-		const res = await fetch(`/api/user/${userId}`);
+		const res = await fetch(`${process.env.REACT_APP_API_URL}/api/user/${userId}`);
 		if (!res.ok) return userId;
 		const user = await res.json();
 		return user.fullName || user.username || user.email || userId;
@@ -301,7 +301,7 @@ useEffect(() => {
     } else {
       // Send to specific users (multi)
       for (const userId of teacherMessageSpecificUsers) {
-        const res = await fetch('/api/message/send', {
+	const res = await fetch(`${process.env.REACT_APP_API_URL}/api/message/send`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -411,7 +411,7 @@ useEffect(() => {
 				teacherId = currentUser._id || currentUser.id || currentUser.username;
 			}
 			if (!teacherId) throw new Error('No teacher ID found');
-			const res = await fetch(`/api/user/${teacherId}`);
+		const res = await fetch(`${process.env.REACT_APP_API_URL}/api/user/${teacherId}`);
 			if (!res.ok) throw new Error('Failed to fetch profile');
 			const data = await res.json();
 			setProfileData(data);
