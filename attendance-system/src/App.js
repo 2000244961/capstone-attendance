@@ -18,6 +18,7 @@ import ManageAttendance from './features/attendance/pages/ManageAttendance';
 import ManageSubjectSection from './features/students/pages/ManageSubjectSection';
 import ProtectedRoute from './features/auth/components/ProtectedRoute';
 
+// Vercel redeploy trigger
 function App() {
   return (
     <UserProvider>
