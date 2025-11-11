@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 // For teacher profile
 import { useNavigate } from 'react-router-dom';
