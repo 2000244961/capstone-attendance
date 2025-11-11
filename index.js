@@ -39,8 +39,9 @@ app.use(cors({
     'https://capstone-attendance-4.onrender.com'
   ],
   credentials: true
-// Fix for socket.io CORS preflight (polling transport)
+}));
 
+// Fix for socket.io CORS preflight (polling transport)
 app.options('/socket.io/*', cors());
 
 // Set Access-Control-Allow-Origin for socket.io polling requests
@@ -60,7 +61,6 @@ app.use(function(req, res, next) {
   }
   next();
 });
-}));
 app.use(express.json());
 // Serve uploads folder as static files, but force download for all files
 const path = require('path');

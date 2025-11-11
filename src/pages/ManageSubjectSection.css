@@ -1,0 +1,22 @@
+/* Contents of ManageSubjectSection.css from features/students/styles */
+
+/* Example CSS rules */
+body {
+	background-color: #f0f0f0;
+}
+
+.subject-section {
+	padding: 20px;
+	border: 1px solid #ccc;
+}
+
+.subject-title {
+	font-size: 24px;
+	font-weight: bold;
+}
+
+.subject-description {
+	font-size: 16px;
+}
+
+/* Additional styles can be added here */

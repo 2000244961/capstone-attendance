@@ -5,10 +5,16 @@ announcementRouter.get('/', (req, res) => {
   res.json({ announcements: announcementList });
 });
 
+<<<<<<< HEAD
 // Export announcementRouter for use in index.js
 module.exports.announcementRouter = announcementRouter;
 const express = require('express');
 const router = express.Router();
+=======
+const express = require('express');
+const router = express.Router();
+const User = require('../models/User');
+>>>>>>> fdb8fcf697c3bfa6741e4910745af02bdca7ad1f
 
 // List users endpoint (move above /:id)
 router.get('/list', async (req, res) => {
@@ -56,7 +62,11 @@ router.get('/:id', async (req, res) => {
   }
 });
 // (Removed misplaced spread logic)
+<<<<<<< HEAD
 const User = require('../models/User');
+=======
+
+>>>>>>> fdb8fcf697c3bfa6741e4910745af02bdca7ad1f
 
 // Auto-approve all parent users on server startup
 User.updateMany({ type: 'parent', approved: false }, { $set: { approved: true } })
@@ -302,4 +312,11 @@ router.post('/login', async (req, res) => {
   }
 });
 
+<<<<<<< HEAD
 module.exports = router;
+=======
+module.exports = {
+  router,
+  announcementRouter
+};
+>>>>>>> fdb8fcf697c3bfa6741e4910745af02bdca7ad1f
