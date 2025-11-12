@@ -641,7 +641,7 @@ useEffect(() => {
 				<div className="admin-main-content" style={{ marginLeft: sidebarOpen ? 260 : 0, transition: 'margin-left 0.3s' }}>
 					   <header className="admin-header" style={{ paddingRight: 36, background: 'linear-gradient(90deg, #010662 0%, #38b2ac 100%)', color: '#fff', borderBottom: '2px solid #010662', boxShadow: '0 2px 8px rgba(1,6,98,0.08)' }}>
 						   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-							   <h1 style={{ margin: '10px 0 10px 60px', color: '#fff', fontWeight: 700 }}>Teacher Dashboard</h1>
+							   <h1 style={{ margin: '10px 0 10px 60px', fontSize: '1.25rem', color: '#fff', fontWeight: 700 }}>Teacher Dashboard</h1>
 							   <div className="admin-user-info" style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
 								   <span className="icon">👤</span>
 								   <span className="username" style={{ color: '#fff', fontWeight: 600 }}>{teacherName}</span>
@@ -868,7 +868,27 @@ useEffect(() => {
 																</form>
 															</div>
 														)}
-										<button onClick={fetchInboxMessages} style={{margin:'16px 0',padding:'8px 18px',background:'#3182ce',color:'#fff',border:'none',borderRadius:6,fontWeight:600,cursor:'pointer'}}>Refresh Inbox</button>
+																				<button
+																					onClick={fetchInboxMessages}
+																					title="Refresh Inbox"
+																					style={{
+																						margin: '16px 0',
+																						background: 'none',
+																						border: 'none',
+																						borderRadius: '50%',
+																						width: 40,
+																						height: 40,
+																						display: 'flex',
+																						alignItems: 'center',
+																						justifyContent: 'center',
+																						cursor: 'pointer',
+																						color: '#3182ce',
+																						fontSize: 26,
+																						boxShadow: '0 1px 4px rgba(49,130,206,0.08)'
+																					}}
+																				>
+																					<InboxIcon color="#3182ce" />
+																				</button>
 										<div style={{background: '#f7fafc', borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.07)', padding: 24, marginTop: 24}}>
 											{inboxLoading ? (
 												<div style={{textAlign:'center',color:'#888'}}>Loading...</div>

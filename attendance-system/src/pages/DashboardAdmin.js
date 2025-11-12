@@ -959,7 +959,27 @@ setAnnouncements(res.data);
                     </form>
                   </div>
                 )}
-                <button onClick={fetchAdminInbox} style={{margin:'16px 0',padding:'8px 18px',background:'#3182ce',color:'#fff',border:'none',borderRadius:6,fontWeight:600,cursor:'pointer'}}>Refresh Inbox</button>
+                <button
+                  onClick={fetchAdminInbox}
+                  title="Refresh Inbox"
+                  style={{
+                    margin: '16px 0',
+                    background: 'none',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: 40,
+                    height: 40,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: '#3182ce',
+                    fontSize: 26,
+                    boxShadow: '0 1px 4px rgba(49,130,206,0.08)'
+                  }}
+                >
+                  <InboxIcon color="#3182ce" />
+                </button>
                 <div style={{background: '#f7fafc', borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.07)', padding: 24, marginTop: 24}}>
                   {adminInboxLoading ? (
                     <div style={{textAlign:'center',color:'#888'}}>Loading...</div>
