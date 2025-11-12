@@ -1,23 +1,35 @@
 const User = require('../models/User');
 const mongoose = require('mongoose');
 
-// Find parent user by studentId (string)
 async function findParentEmailByStudentId(studentId) {
-  // Try to find parent by linkedStudent ObjectId match
-  let parent = await User.findOne({ type: 'parent', linkedStudent: studentId });
-  if (parent && parent.email) return parent.email;
+  // Normalize studentId
+  const studentIdStr = String(studentId);
 
-  // If not found, try to match by studentId string in populated linkedStudent
-  const parents = await User.find({ type: 'parent' }).populate('linkedStudent');
+  // 1️⃣ Try direct ObjectId match (if linkedStudent stores ObjectId)
+  let parent = await User.findOne({
+    type: 'parent',
+    linkedStudent: mongoose.Types.ObjectId.isValid(studentIdStr)
+      ? new mongoose.Types.ObjectId(studentIdStr)
+      : studentIdStr
+  });
+
+  if (parent?.email) return parent.email;
+
+  // 2️⃣ Try matching via populated student.studentId
+  const parents = await User.find({ type: 'parent' }).populate('linkedStudent', 'studentId email');
+
   for (const p of parents) {
-    if (Array.isArray(p.linkedStudent)) {
-      for (const student of p.linkedStudent) {
-        if (student.studentId && String(student.studentId) === String(studentId)) {
-          return p.email;
-        }
+    const linked = Array.isArray(p.linkedStudent)
+      ? p.linkedStudent
+      : [p.linkedStudent];
+
+    for (const student of linked) {
+      if (student?.studentId && String(student.studentId) === studentIdStr) {
+        return p.email;
       }
     }
   }
+
   return null;
 }
 
