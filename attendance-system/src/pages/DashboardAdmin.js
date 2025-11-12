@@ -750,7 +750,7 @@ setAnnouncements(res.data);
         <div className="admin-main-content" style={{ marginLeft: sidebarOpen ? 260 : 0, transition: 'margin-left 0.3s' }}>
           <header className="admin-header" style={{ background: 'linear-gradient(90deg, #010662 0%, #38b2ac 100%)', color: '#fff', borderBottom: '2px solid #010662', boxShadow: '0 2px 8px rgba(1,6,98,0.08)' }}>
             <div className="admin-header-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <h2 style={{margin: '10px 0 10px 60px', fontSize:'25px', color:'#fff', fontWeight:700, fontFamily: 'sans-serif'}}>Admin Dashboard</h2>
+              <h2 style={{margin: '10px 0 10px 60px', fontSize:'1.25rem', color:'#fff', fontWeight:700, fontFamily: 'sans-serif'}}>Admin Dashboard</h2>
               <div className="admin-user-info" style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
                 <div style={{ position: 'relative', display: 'inline-block' }}>
                   <NotificationIcon 
