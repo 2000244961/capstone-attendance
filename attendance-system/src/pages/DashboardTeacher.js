@@ -887,7 +887,7 @@ useEffect(() => {
 																						boxShadow: '0 1px 4px rgba(49,130,206,0.08)'
 																					}}
 																				>
-																					<InboxIcon color="#3182ce" />
+																					<span role="img" aria-label="refresh">🔄</span>
 																				</button>
 										<div style={{background: '#f7fafc', borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.07)', padding: 24, marginTop: 24}}>
 											{inboxLoading ? (
