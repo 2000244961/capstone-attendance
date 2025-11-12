@@ -29,8 +29,12 @@ function DashboardParent() {
       if (!currentUser?._id) return;
       try {
         const profile = await fetchUserProfile(currentUser._id);
-        // linkedStudent is now an array of string IDs
-        setLinkedStudents(profile.linkedStudent || []);
+        // Ensure linkedStudent is an array of string IDs
+        let linked = profile.linkedStudent || [];
+        if (!Array.isArray(linked)) linked = [linked];
+        linked = linked.map(id => typeof id === 'object' && id.toString ? id.toString() : String(id));
+        setLinkedStudents(linked);
+        console.log('[Parent Dashboard] Linked studentId values:', linked);
       } catch (e) {
         setLinkedStudents([]);
       }
@@ -138,7 +142,7 @@ function DashboardParent() {
                 </thead>
                 <tbody>
                   {linkedStudents.map(studentId => {
-                    const att = attendance.find(a => a.studentId === studentId);
+                    const att = attendance.find(a => String(a.studentId) === String(studentId));
                     return (
                       <tr key={studentId}>
                         <td style={{ padding: 8, border: '1px solid #e3e3e3' }}>{studentId}</td>
