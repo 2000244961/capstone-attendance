@@ -25,7 +25,7 @@ transporter.verify(function(error, success) {
 
 async function sendMail({ to, subject, text, html, attachments }) {
   return transporter.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    from: process.env.SMTP_FROM || process.env.SMTP_USER || 'spcc10102025@gmail.com',
     to,
     subject,
     text,
