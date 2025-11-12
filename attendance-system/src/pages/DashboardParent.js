@@ -13,6 +13,7 @@ function DashboardParent() {
   const [showProfile, setShowProfile] = useState(false);
   const [linkedStudents, setLinkedStudents] = useState([]);
   const [attendance, setAttendance] = useState([]);
+  const [parentAttendance, setParentAttendance] = useState(null);
   const [selectedDate, setSelectedDate] = useState(() => {
     // Default to today in yyyy-mm-dd
     const d = new Date();
@@ -37,11 +38,12 @@ function DashboardParent() {
     fetchLinked();
   }, [currentUser]);
 
-  // Fetch attendance for linked students and selected date
+  // Fetch attendance for linked students and parent for selected date
   useEffect(() => {
-    async function fetchAttendanceForStudents() {
-      if (!linkedStudents.length || !selectedDate) {
+    async function fetchAttendanceForStudentsAndParent() {
+      if (!selectedDate) {
         setAttendance([]);
+        setParentAttendance(null);
         return;
       }
       setLoading(true);
@@ -51,13 +53,21 @@ function DashboardParent() {
         // linkedStudents is now an array of string IDs
         const filtered = allAttendance.filter(a => linkedStudents.includes(a.studentId));
         setAttendance(filtered);
+        // Find parent's own attendance record
+        if (currentUser?._id) {
+          const parentAtt = allAttendance.find(a => a.studentId === currentUser._id);
+          setParentAttendance(parentAtt || null);
+        } else {
+          setParentAttendance(null);
+        }
       } catch (e) {
         setAttendance([]);
+        setParentAttendance(null);
       }
       setLoading(false);
     }
-    fetchAttendanceForStudents();
-  }, [linkedStudents, selectedDate]);
+    fetchAttendanceForStudentsAndParent();
+  }, [linkedStudents, selectedDate, currentUser]);
 
 
   return (
@@ -90,7 +100,7 @@ function DashboardParent() {
       {/* Attendance Section */}
       <div style={{ margin: '32px 24px 0 24px', background: '#fff', borderRadius: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.07)', padding: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 18 }}>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>Student Attendance</h2>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>Attendance Overview</h2>
           <input
             type="date"
             value={selectedDate}
@@ -102,6 +112,17 @@ function DashboardParent() {
           <div>Loading attendance...</div>
         ) : (
           <>
+            {/* Parent's own attendance overview */}
+            <div style={{ marginBottom: 24, padding: 16, background: '#f5f7fa', borderRadius: 8, border: '1px solid #e3e3e3', maxWidth: 400 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#2196F3' }}>Your Attendance for {selectedDate}</h3>
+              <div style={{ marginTop: 8, fontSize: 16 }}>
+                Status: <span style={{ fontWeight: 700 }}>{parentAttendance ? parentAttendance.status : 'No record'}</span>
+                {parentAttendance && parentAttendance.time && (
+                  <span> | Time: {parentAttendance.time}</span>
+                )}
+              </div>
+            </div>
+            {/* Linked students attendance table */}
             {linkedStudents.length === 0 ? (
               <div style={{ color: '#888' }}>No linked students found for this parent.</div>
             ) : (
