@@ -159,6 +159,39 @@ function FaceRecognition() {
       return;
     }
     // ...existing capture logic...
+     if (!recognizedStudent) {
+      alert('No student recognized. Please try again.');
+      return;
+    }
+    if (!selectedSection || !selectedSubject) {
+      alert('Please select a section and subject.');
+      return;
+    }
+    try {
+      const payload = {
+        studentId: recognizedStudent.studentId || recognizedStudent._id,
+        section: selectedSection,
+        subject: selectedSubject,
+        date: new Date().toISOString().slice(0, 10),
+        method: 'face',
+      };
+      const res = await fetch('/api/attendance/mark', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        alert('Attendance marked successfully!');
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert('Failed to mark attendance: ' + (err.message || res.statusText));
+      }
+    } catch (err) {
+      alert('Error submitting attendance: ' + (err.message || err));
+    }
   };
 
 
