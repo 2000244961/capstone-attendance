@@ -7,7 +7,7 @@
   "license": "MIT",
   "scripts": {
     "start": "node index.js",
-    "build": "",
+    "build": ""
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
