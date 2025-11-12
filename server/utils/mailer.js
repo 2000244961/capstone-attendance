@@ -4,10 +4,10 @@ const nodemailer = require('nodemailer');
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 587,
-  secure: false, // ❌ was true, should be false for STARTTLS
+  secure: true, // ❌ was true, should be false for STARTTLS
   auth: {
-    user: 'spcc10102025@gmail.com',
-    pass: 'oqar slfn wbds ayia'
+    user: 'ext.princejio.tigley@gmail.com',
+    pass: 'icvg wcjs ksgr fkjl'
   }
 });
 
