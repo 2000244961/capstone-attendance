@@ -203,8 +203,7 @@ function FaceRecognition() {
     // Save attendance to backend if a match is found
     if (bestMatch && bestDistance < 0.6 && bestMatch.section === selectedSection) {
       try {
-        // Hardcoded scan time for Philippines timezone (Asia/Manila)
-        const hardcodedTime = '08:00:00 AM';
+        const localTime = new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
         const response = await addAttendance({
           name: bestMatch.fullName,
           studentId: bestMatch.studentId,
@@ -215,12 +214,12 @@ function FaceRecognition() {
           date: new Date().toISOString().slice(0, 10),
           viaFacialRecognition: true,
           recordedAt: new Date().toISOString(),
-          time: hardcodedTime,
+          time: localTime,
           image: capturedImage // base64 image
         });
         setScannedStudents(prev => [...prev, bestMatch.studentId]); // Mark as scanned
         console.log('Attendance POST response:', response);
-        setResult({ success: true, name: bestMatch.fullName, confidence: 1 - bestDistance, scanTime: hardcodedTime });
+        setResult({ success: true, name: bestMatch.fullName, confidence: 1 - bestDistance, scanTime: localTime });
       } catch (err) {
         if (err.response && err.response.status === 409) {
           setScannedStudents(prev => [...prev, bestMatch.studentId]); // Mark as scanned if backend says already scanned
