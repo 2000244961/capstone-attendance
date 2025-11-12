@@ -5,6 +5,7 @@ import InboxIcon from '../shared/components/InboxIcon';
 import { fetchInbox, sendExcuseLetter, fetchSentMessages } from '../api/messageApi';
 import { fetchAllTeachers, fetchUserProfile } from '../api/userApi';
 import { fetchAttendance } from '../api/attendanceApi';
+import { fetchStudents } from '../features/students/pages/studentApi';
 import '../styles/DashboardParent.css';
 
 
@@ -13,6 +14,7 @@ function DashboardParent() {
   const [showProfile, setShowProfile] = useState(false);
   const [linkedStudents, setLinkedStudents] = useState([]);
   const [attendance, setAttendance] = useState([]);
+  const [studentMap, setStudentMap] = useState({});
   const [parentAttendance, setParentAttendance] = useState(null);
   const [selectedDate, setSelectedDate] = useState(() => {
     // Default to today in yyyy-mm-dd
@@ -23,9 +25,9 @@ function DashboardParent() {
   const { user: currentUser } = useUser();
   const parentName = currentUser?.fullName || currentUser?.name || currentUser?.username || 'Parent';
 
-  // Fetch linked students for this parent
+  // Fetch linked students for this parent and all student info
   useEffect(() => {
-    async function fetchLinked() {
+    async function fetchLinkedAndStudents() {
       if (!currentUser?._id) return;
       try {
         const profile = await fetchUserProfile(currentUser._id);
@@ -34,12 +36,21 @@ function DashboardParent() {
         if (!Array.isArray(linked)) linked = [linked];
         linked = linked.map(id => typeof id === 'object' && id.toString ? id.toString() : String(id));
         setLinkedStudents(linked);
+        // Fetch all students and build a map for quick lookup
+        const allStudents = await fetchStudents();
+        const map = {};
+        allStudents.forEach(s => {
+          map[String(s._id)] = s;
+          if (s.studentId) map[String(s.studentId)] = s;
+        });
+        setStudentMap(map);
         console.log('[Parent Dashboard] Linked studentId values:', linked);
       } catch (e) {
         setLinkedStudents([]);
+        setStudentMap({});
       }
     }
-    fetchLinked();
+    fetchLinkedAndStudents();
   }, [currentUser]);
 
   // Fetch attendance for linked students and parent for selected date
@@ -90,7 +101,7 @@ function DashboardParent() {
         zIndex: 2
       }}>
         <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-          <h1 style={{ fontSize: '2rem', fontWeight: 700, margin: 0, letterSpacing: '0.5px' }}>Parent Dashboard</h1>
+          <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, letterSpacing: '0.5px' }}>Parent Dashboard</h1>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 18 }}>
             <div style={{ position: 'relative' }}>
               <InboxIcon unreadCount={unreadInboxCount} onClick={() => {}} />
@@ -143,9 +154,10 @@ function DashboardParent() {
                 <tbody>
                   {linkedStudents.map(studentId => {
                     const att = attendance.find(a => String(a.studentId) === String(studentId));
+                    const student = studentMap[String(studentId)];
                     return (
                       <tr key={studentId}>
-                        <td style={{ padding: 8, border: '1px solid #e3e3e3' }}>{studentId}</td>
+                        <td style={{ padding: 8, border: '1px solid #e3e3e3' }}>{student ? (student.fullName || student.name || student.username || student.studentId || studentId) : studentId}</td>
                         <td style={{ padding: 8, border: '1px solid #e3e3e3' }}>{att ? att.status : 'Absent'}</td>
                         <td style={{ padding: 8, border: '1px solid #e3e3e3' }}>{att ? (att.time || '-') : '-'}</td>
                       </tr>
