@@ -4,8 +4,7 @@ const mongoose = require('mongoose');
 const Attendance = require(path.resolve(__dirname, '../../server/models/Attendance'));
 const User = require(path.resolve(__dirname, '../../server/models/User'));
 const SubjectSection = require(path.resolve(__dirname, '../../server/models/SubjectSection'));
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/attendance';
-
+const MONGO_URI = 'mongodb+srv://dbAttendanceSystem:dbAttendanceSystem@cluster0.cvbvtae.mongodb.net/?appName=Cluster0';
 async function main() {
   console.log('Auto-mark absent script started.');
   let totalStudents = 0;
