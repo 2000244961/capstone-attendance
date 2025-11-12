@@ -759,6 +759,9 @@ useEffect(() => {
 												Sent
 											</button>
 											<div style={{flex:1}} />
+											<button onClick={()=>setShowSendMessage(v=>!v)} style={{padding:'8px 18px',background:'#38a169',color:'#fff',border:'none',borderRadius:6,fontWeight:600,cursor:'pointer'}}>
+												{showSendMessage ? 'Close' : '+ New Message'}
+											</button>
 											<button
 												onClick={fetchInboxMessages}
 												title="Refresh Inbox"
@@ -779,9 +782,6 @@ useEffect(() => {
 												}}
 											>
 												<span role="img" aria-label="refresh">🔄</span>
-											</button>
-											<button onClick={()=>setShowSendMessage(v=>!v)} style={{padding:'8px 18px',background:'#38a169',color:'#fff',border:'none',borderRadius:6,fontWeight:600,cursor:'pointer'}}>
-												{showSendMessage ? 'Close' : '+ New Message'}
 											</button>
 										</div>
 														{showSendMessage && (

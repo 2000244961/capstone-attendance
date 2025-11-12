@@ -850,6 +850,9 @@ setAnnouncements(res.data);
                     Sent
                   </button>
                   <div style={{flex:1}} />
+                  <button onClick={()=>setShowSendMessage(v=>!v)} className="dashboard-btn primary">
+                    {showSendMessage ? 'Close' : '+ New Message'}
+                  </button>
                   <button
                     onClick={fetchAdminInbox}
                     title="Refresh Inbox"
@@ -870,9 +873,6 @@ setAnnouncements(res.data);
                     }}
                   >
                     <span role="img" aria-label="refresh">🔄</span>
-                  </button>
-                  <button onClick={()=>setShowSendMessage(v=>!v)} className="dashboard-btn primary">
-                    {showSendMessage ? 'Close' : '+ New Message'}
                   </button>
                 </div>
                 {showSendMessage && (
