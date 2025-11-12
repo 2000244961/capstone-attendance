@@ -5,16 +5,16 @@ announcementRouter.get('/', (req, res) => {
   res.json({ announcements: announcementList });
 });
 
-<<<<<<< HEAD
+// <<<<<<< HEAD
 // Export announcementRouter for use in index.js
 module.exports.announcementRouter = announcementRouter;
 const express = require('express');
 const router = express.Router();
-=======
-const express = require('express');
-const router = express.Router();
-const User = require('../models/User');
->>>>>>> fdb8fcf697c3bfa6741e4910745af02bdca7ad1f
+// =======
+// const express = require('express');
+// const router = express.Router();
+// const User = require('../models/User');
+// >>>>>>> fdb8fcf697c3bfa6741e4910745af02bdca7ad1f
 
 // List users endpoint (move above /:id)
 router.get('/list', async (req, res) => {
