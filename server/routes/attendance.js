@@ -98,7 +98,7 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     console.log('Received attendance POST:', req.body);
-    const { studentId, date, name, section, subject, status } = req.body;
+    const { studentId, date, name, section, subject } = req.body;
     // Check for existing record for this student, subject, and date
     const existing = await Attendance.findOne({ studentId, subject, date });
     if (existing) {
@@ -144,6 +144,7 @@ router.post('/', async (req, res) => {
     if (req.io) {
       req.io.emit('attendance:new', newRecord);
     }
+
     // Notify parent by email (if found)
     try {
       const parentEmail = await findParentEmailByStudentId(studentId);
@@ -190,6 +191,37 @@ router.post('/', async (req, res) => {
     } catch (emailErr) {
       console.error('Failed to send parent notification email:', emailErr);
     }
+
+    // --- PARENT ATTENDANCE LOGIC ---
+    // Mark parent as present if any linked student is present for this subject/section/date
+    const User = require('../models/User');
+    const mongoose = require('mongoose');
+    // Find all parents linked to this student
+    const parents = await User.find({ type: 'parent', linkedStudent: mongoose.Types.ObjectId.isValid(studentId) ? mongoose.Types.ObjectId(studentId) : undefined }).populate('linkedStudent');
+    for (const parent of parents) {
+      // Check if parent already has attendance for this date/section/subject
+      const parentAttendance = await Attendance.findOne({ studentId: parent._id.toString(), date: recordDate, section, subject });
+      if (!parentAttendance) {
+        // Mark parent as present if any linked student is present for this subject/section/date
+        await Attendance.create({
+          studentId: parent._id.toString(),
+          name: parent.fullName || parent.username,
+          section,
+          subject,
+          status: attendanceStatus, // present/absent same as student
+          date: recordDate,
+          timestamp: scanDateObj,
+          markedBy: 'system-parent'
+        });
+      } else {
+        // Optionally, update status if needed (e.g., if any student is present, parent is present)
+        if (attendanceStatus === 'present' && parentAttendance.status !== 'present') {
+          parentAttendance.status = 'present';
+          await parentAttendance.save();
+        }
+      }
+    }
+
     res.status(201).json(newRecord);
   } catch (err) {
     console.error('Attendance save error:', err);

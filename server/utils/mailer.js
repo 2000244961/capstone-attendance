@@ -10,6 +10,7 @@ const transporter = nodemailer.createTransport({
     pass: 'bffd drzf mjrt spez'
   }
 });
+//
 
 
 // Debug SMTP connection on startup
