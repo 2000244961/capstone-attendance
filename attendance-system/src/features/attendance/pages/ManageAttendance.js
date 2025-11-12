@@ -351,6 +351,10 @@ const ManageAttendance = () => {
                                                     </span>
                                                 </td>
                                                 <td>{(() => {
+                                                    // Prefer the 'time' field if available (from FaceRecognition scan)
+                                                    if (record.time && record.time !== '-') {
+                                                        return record.time;
+                                                    }
                                                     if (!record.timestamp || record.timestamp === '-') return '-';
                                                     let dateObj;
                                                     if (record.recordedAt) {
