@@ -850,6 +850,27 @@ setAnnouncements(res.data);
                     Sent
                   </button>
                   <div style={{flex:1}} />
+                  <button
+                    onClick={fetchAdminInbox}
+                    title="Refresh Inbox"
+                    style={{
+                      margin: '0',
+                      background: 'none',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: 40,
+                      height: 40,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      color: '#3182ce',
+                      fontSize: 26,
+                      boxShadow: '0 1px 4px rgba(49,130,206,0.08)'
+                    }}
+                  >
+                    <span role="img" aria-label="refresh">🔄</span>
+                  </button>
                   <button onClick={()=>setShowSendMessage(v=>!v)} className="dashboard-btn primary">
                     {showSendMessage ? 'Close' : '+ New Message'}
                   </button>
@@ -959,27 +980,7 @@ setAnnouncements(res.data);
                     </form>
                   </div>
                 )}
-                <button
-                  onClick={fetchAdminInbox}
-                  title="Refresh Inbox"
-                  style={{
-                    margin: '16px 0',
-                    background: 'none',
-                    border: 'none',
-                    borderRadius: '50%',
-                    width: 40,
-                    height: 40,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    color: '#3182ce',
-                    fontSize: 26,
-                    boxShadow: '0 1px 4px rgba(49,130,206,0.08)'
-                  }}
-                >
-                  <span role="img" aria-label="refresh">🔄</span>
-                </button>
+                {/* Refresh button moved above, removed from here */}
                 <div style={{background: '#f7fafc', borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.07)', padding: 24, marginTop: 24}}>
                   {adminInboxLoading ? (
                     <div style={{textAlign:'center',color:'#888'}}>Loading...</div>
