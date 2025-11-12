@@ -85,7 +85,11 @@ app.use('/api/attendance', (req, res, next) => {
 // Mount debug attendance route
 app.use('/api/attendance', require('./routes/attendanceDebug'));
 const userRoutes = require('./routes/user');
-app.use('/api/user', userRoutes.router);
+// <<<<<<< HEAD
+app.use('/api/user', userRoutes);
+// =======
+// app.use('/api/user', userRoutes.router);
+// >>>>>>> fdb8fcf697c3bfa6741e4910745af02bdca7ad1f
 // Mount /api/announcement route
 if (userRoutes.announcementRouter) {
   app.use('/api/announcement', userRoutes.announcementRouter);

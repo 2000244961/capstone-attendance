@@ -97,15 +97,22 @@ function DashboardParent() {
     async function fetchAndFilterAttendance() {
       try {
         const allAttendance = await fetchAttendance();
-  const linkedStudentIds = linkedStudents.map(s => String(s.studentId)).filter(Boolean);
-  console.log('[Parent Dashboard] Linked numeric studentIds:', linkedStudentIds);
-        console.log('[Parent Dashboard] Raw attendance records:', allAttendance);
+        // Collect all possible IDs for linked students
+        const linkedStudentIds = linkedStudents.map(s => String(s.studentId)).filter(Boolean);
+        const linkedStudentDbIds = linkedStudents.map(s => String(s._id)).filter(Boolean);
+        console.log('[Parent Dashboard] Linked studentId values:', linkedStudentIds);
+        console.log('[Parent Dashboard] Linked _id values:', linkedStudentDbIds);
+        if (Array.isArray(allAttendance)) {
+          console.log('[Parent Dashboard] Attendance record studentIds:', allAttendance.map(a => a.studentId));
+          console.log('[Parent Dashboard] Attendance record _ids:', allAttendance.map(a => a._id));
+        }
         const filtered = Array.isArray(allAttendance)
           ? allAttendance.filter(a => {
               const attId = String(a.studentId);
-              const match = linkedStudentIds.includes(attId);
+              const attDbId = a._id ? String(a._id) : null;
+              const match = linkedStudentIds.includes(attId) || (attDbId && linkedStudentDbIds.includes(attDbId));
               if (!match) {
-                console.log('[Parent Dashboard] Attendance record not matched:', a, 'against numeric studentIds:', linkedStudentIds);
+                console.log('[Parent Dashboard] Attendance record not matched:', a, 'against studentIds:', linkedStudentIds, 'and _ids:', linkedStudentDbIds);
               }
               return match;
             })
