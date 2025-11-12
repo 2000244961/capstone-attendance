@@ -8,7 +8,7 @@ import { loadFaceApiModels, areModelsLoaded } from '../../shared/faceApiLoader';
 import { fetchStudents, addStudent, updateStudent, deleteStudent } from './studentApi';
 import { fetchSubjectSections } from './subjectSectionApi';
 import '../styles/ManageStudent.css';
-
+// Removed stray 'a' character
 // Add processFaceDetection after all imports
 async function processFaceDetection(photo) {
   try {
