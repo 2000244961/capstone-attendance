@@ -316,7 +316,7 @@ router.post('/login', async (req, res) => {
 // module.exports = router;
 // =======
 module.exports = {
-  router,
+  // router,
   announcementRouter
 };
 // >>>>>>> fdb8fcf697c3bfa6741e4910745af02bdca7ad1f
