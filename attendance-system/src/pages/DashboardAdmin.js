@@ -350,6 +350,21 @@ setAnnouncements(res.data);
   const handleAddUserSubmit = async (e) => {
     e.preventDefault();
     setAddUserError("");
+    // Username should not contain numbers for teacher or parent
+    if ((addUserRole === 'teacher' || addUserRole === 'parent') && /\d/.test(addUserForm.username)) {
+      setAddUserError('Username should not contain numbers for teachers or parents.');
+      return;
+    }
+    // ID Number should not contain letters for teacher
+    if (addUserRole === 'teacher' && addUserForm.idNumber && /[a-zA-Z]/.test(addUserForm.idNumber)) {
+      setAddUserError('ID Number should not contain letters for teachers.');
+      return;
+    }
+    // Contact Number should not contain letters for teacher or parent
+    if ((addUserRole === 'teacher' || addUserRole === 'parent') && addUserForm.contact && /[a-zA-Z]/.test(addUserForm.contact)) {
+      setAddUserError('Contact Number should not contain letters.');
+      return;
+    }
     setAddUserLoading(true);
     try {
       // Basic validation
@@ -1194,11 +1209,30 @@ setAnnouncements(res.data);
                         </div>
                         <div className="form-group">
                           <label>Middle Name<span style={{color:'red'}}>*</span></label>
-                          <select name="middleName" value={addUserForm.middleName} onChange={handleAddUserFormChange} required>
-                            <option value="">N/A</option>
+                          <select
+                            name="middleNameSelect"
+                            value={addUserForm.middleName === '' ? '' : (addUserForm.middleName === 'N/A' ? 'N/A' : 'custom')}
+                            onChange={e => {
+                              if (e.target.value === 'N/A') {
+                                setAddUserForm(prev => ({ ...prev, middleName: 'N/A' }));
+                              } else {
+                                setAddUserForm(prev => ({ ...prev, middleName: '' }));
+                              }
+                            }}
+                            required
+                          >
+                            <option value="">Enter Middle Name</option>
                             <option value="N/A">N/A</option>
                           </select>
-                          <input name="middleName" type="text" value={addUserForm.middleName !== 'N/A' ? addUserForm.middleName : ''} onChange={handleAddUserFormChange} placeholder="Enter middle name or select N/A" disabled={addUserForm.middleName === 'N/A'} />
+                          <input
+                            name="middleName"
+                            type="text"
+                            value={addUserForm.middleName !== 'N/A' ? addUserForm.middleName : ''}
+                            onChange={e => setAddUserForm(prev => ({ ...prev, middleName: e.target.value }))}
+                            placeholder="Enter middle name or select N/A"
+                            disabled={addUserForm.middleName === 'N/A'}
+                            required={addUserForm.middleName !== 'N/A'}
+                          />
                         </div>
                       </div>
                       {/* Row 2: Contact fields */}
