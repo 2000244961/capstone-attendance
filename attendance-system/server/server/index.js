@@ -10,7 +10,11 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
+<<<<<<< HEAD
     origin: ['https://attendance-backend-4-gl1f.onrender.com/','http://localhost:7000'],
+=======
+    origin: ['https://attendance-backend-4-gl1f.onrender.com/','http://localhost','*'],
+>>>>>>> fdb8fcf697c3bfa6741e4910745af02bdca7ad1f
     methods: ['GET', 'POST']
   }
 });
@@ -83,7 +87,11 @@ app.use('/api/attendance', (req, res, next) => {
 // Mount debug attendance route
 app.use('/api/attendance', require('./routes/attendanceDebug'));
 const userRoutes = require('./routes/user');
+<<<<<<< HEAD
 app.use('/api/user', userRoutes);
+=======
+app.use('/api/user', userRoutes.router);
+>>>>>>> fdb8fcf697c3bfa6741e4910745af02bdca7ad1f
 // Mount /api/announcement route
 if (userRoutes.announcementRouter) {
   app.use('/api/announcement', userRoutes.announcementRouter);

@@ -146,7 +146,9 @@ router.post('/', async (req, res) => {
     }
     // Notify parent by email (if found)
     try {
+      console.log('[EMAIL DEBUG] Looking for parent email for studentId:', studentId);
       const parentEmail = await findParentEmailByStudentId(studentId);
+      console.log('[EMAIL DEBUG] parentEmail result:', parentEmail);
       let scanTime = req.body.time;
       let formattedTime = '';
       if (scanTime) {
@@ -173,9 +175,10 @@ router.post('/', async (req, res) => {
             encoding: 'base64',
             cid: 'studentphoto@attendance'
           }];
-          htmlContent += `<p><img src="cid:studentphoto@attendance" alt="Student Photo" style="max-width:200px;max-height:200px;border-radius:8px;" /></p>`;
+          htmlContent += `<p><img src=\"cid:studentphoto@attendance\" alt=\"Student Photo\" style=\"max-width:200px;max-height:200px;border-radius:8px;\" /></p>`;
         }
         htmlContent += '<p>Thank you.</p>';
+        console.log('[EMAIL DEBUG] Sending email to:', parentEmail);
         await sendMail({
           to: parentEmail,
           subject: `Attendance Notification for ${name}`,
@@ -183,12 +186,12 @@ router.post('/', async (req, res) => {
           html: htmlContent,
           attachments
         });
-        console.log('Parent notified by email:', parentEmail);
+        console.log('[EMAIL DEBUG] Email sent to:', parentEmail);
       } else {
-        console.log('No parent email found for student:', studentId);
+        console.log('[EMAIL DEBUG] No parent email found for student:', studentId);
       }
     } catch (emailErr) {
-      console.error('Failed to send parent notification email:', emailErr);
+      console.error('[EMAIL DEBUG] Failed to send parent notification email:', emailErr);
     }
     res.status(201).json(newRecord);
   } catch (err) {

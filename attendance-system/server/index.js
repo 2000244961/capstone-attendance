@@ -1,3 +1,4 @@
+// Trigger redeploy with a dummy change
 // Basic Express server with MongoDB connection using mongoose
 
 // DEBUG: Log userRoutes import before anything else
@@ -18,10 +19,10 @@ const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
     origin: [
-      'https://attendance-backend-4-gl1f.onrender.com/',
-      'http://localhost',
-      '*',
-      'https://stirring-youtiao-750d22.netlify.app'
+      'https://stirring-youtiao-750d22.netlify.app',
+      'http://localhost:3000',
+      'http://localhost:5000',
+      'https://capstone-attendance-4.onrender.com'
     ],
     methods: ['GET', 'POST'],
     credentials: true
@@ -33,13 +34,34 @@ const PORT = process.env.PORT || 7000;
 
 app.use(cors({
   origin: [
-    'https://attendance-backend-4-gl1f.onrender.com/',
-    'http://localhost',
-    '*',
-    'https://stirring-youtiao-750d22.netlify.app'
+    'https://stirring-youtiao-750d22.netlify.app',
+    'http://localhost:3000',
+    'http://localhost:5000',
+    'https://capstone-attendance-4.onrender.com'
   ],
   credentials: true
 }));
+
+// Fix for socket.io CORS preflight (polling transport)
+app.options('/socket.io/*', cors());
+
+// Set Access-Control-Allow-Origin for socket.io polling requests
+app.use(function(req, res, next) {
+  if (req.path.startsWith('/socket.io/')) {
+    const allowedOrigins = [
+      'https://stirring-youtiao-750d22.netlify.app',
+      'http://localhost:3000',
+      'http://localhost:5000',
+      'https://capstone-attendance-4.onrender.com'
+    ];
+    const origin = req.headers.origin;
+    if (allowedOrigins.includes(origin)) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Access-Control-Allow-Credentials', 'true');
+    }
+  }
+  next();
+});
 app.use(express.json());
 // Serve uploads folder as static files, but force download for all files
 const path = require('path');

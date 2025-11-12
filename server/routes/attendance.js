@@ -192,48 +192,7 @@ router.post('/', async (req, res) => {
       console.error('Failed to send parent notification email:', emailErr);
     }
 
-    // --- PARENT ATTENDANCE LOGIC ---
-    // Mark parent as present if any linked student is present for this subject/section/date
-    const User = require('../models/User');
-    const mongoose = require('mongoose');
-    // Find the student ObjectId from the Student collection
-    let studentObjId = null;
-    try {
-      const Student = mongoose.model('Student');
-      const studentDoc = await Student.findOne({ studentId });
-      if (studentDoc) {
-        studentObjId = studentDoc._id;
-      }
-    } catch (e) {
-      // fallback: skip if Student model not available
-    }
-    if (studentObjId) {
-      // Find all parents whose linkedStudent contains this ObjectId
-      const parents = await User.find({ type: 'parent', linkedStudent: studentObjId });
-      for (const parent of parents) {
-        // Check if parent already has attendance for this date/section/subject
-        const parentAttendance = await Attendance.findOne({ studentId: parent._id.toString(), date: recordDate, section, subject });
-        if (!parentAttendance) {
-          // Mark parent as present if any linked student is present for this subject/section/date
-          await Attendance.create({
-            studentId: parent._id.toString(),
-            name: parent.fullName || parent.username,
-            section,
-            subject,
-            status: attendanceStatus, // present/absent same as student
-            date: recordDate,
-            timestamp: scanDateObj,
-            markedBy: 'system-parent'
-          });
-        } else {
-          // Optionally, update status if needed (e.g., if any student is present, parent is present)
-          if (attendanceStatus === 'present' && parentAttendance.status !== 'present') {
-            parentAttendance.status = 'present';
-            await parentAttendance.save();
-          }
-        }
-      }
-    }
+    // Parents should NOT get attendance records. Only students are recorded.
 
     res.status(201).json(newRecord);
   } catch (err) {

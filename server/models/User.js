@@ -17,10 +17,9 @@ const UserSchema = new mongoose.Schema({
   subjects: [{
     type: String // subject name or id
   }],
-  // Parent linked students
+  // Parent linked students (array of student user IDs as strings)
   linkedStudent: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Student'
+    type: String
   }]
 });
 

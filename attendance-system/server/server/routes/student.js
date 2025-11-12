@@ -1,19 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
+const Student = require('../models/Student'); // <-- Use the shared model
 
-// Student model (define if not exists)
-const Student = mongoose.model('Student', new mongoose.Schema({
-  fullName: String,
-  studentId: String,
-  section: String,
-  subject: String,
-  photo: String,
-  status: String,
-  descriptor: [Number] // Face descriptor for recognition
-}));
-
-// GET /api/student/list
+// GET /api/students/list
 router.get('/list', async (req, res) => {
   try {
     const students = await Student.find();
@@ -23,7 +12,7 @@ router.get('/list', async (req, res) => {
   }
 });
 
-// GET /api/student
+// GET /api/students
 router.get('/', async (req, res) => {
   try {
     const students = await Student.find();
@@ -32,16 +21,9 @@ router.get('/', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch students' });
   }
 });
-// POST /api/student/add
+
+// POST /api/students/add
 router.post('/add', async (req, res) => {
-  router.get('/', async (req, res) => {
-    try {
-      const students = await Student.find();
-      res.json(students);
-    } catch (err) {
-      res.status(500).json({ error: 'Failed to fetch students' });
-    }
-  });
   try {
     const student = new Student(req.body);
     await student.save();
@@ -51,7 +33,24 @@ router.post('/add', async (req, res) => {
   }
 });
 
-// DELETE /api/student/delete/:id
+// PUT /api/students/:id
+router.put('/:id', async (req, res) => {
+  try {
+    const updatedStudent = await Student.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+    if (!updatedStudent) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+    res.json(updatedStudent);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update student' });
+  }
+});
+
+// DELETE /api/students/delete/:id
 router.delete('/delete/:id', async (req, res) => {
   try {
     await Student.findByIdAndDelete(req.params.id);

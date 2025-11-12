@@ -131,16 +131,17 @@ const ManageAttendance = () => {
     // Update attendance status
     const handleStatusChange = async (recordId, newStatus) => {
         try {
-            const currentTime = new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' });
+            // Use device's local time zone for attendance time
+            const localTime = new Date().toLocaleTimeString(undefined, { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
             const currentDateTime = new Date().toISOString();
             await updateAttendance(recordId, {
                 status: newStatus,
-                timestamp: newStatus !== 'Absent' ? currentTime : '-',
+                timestamp: newStatus !== 'Absent' ? localTime : '-',
                 recordedAt: currentDateTime
             });
             setAttendanceData(prev => prev.map(record =>
                 record._id === recordId
-                    ? { ...record, status: newStatus, timestamp: newStatus !== 'Absent' ? currentTime : '-', recordedAt: currentDateTime }
+                    ? { ...record, status: newStatus, timestamp: newStatus !== 'Absent' ? localTime : '-', recordedAt: currentDateTime }
                     : record
             ));
             setLastUpdate(Date.now());
@@ -350,6 +351,10 @@ const ManageAttendance = () => {
                                                     </span>
                                                 </td>
                                                 <td>{(() => {
+                                                    // Prefer the 'time' field if available (from FaceRecognition scan)
+                                                    if (record.time && record.time !== '-') {
+                                                        return record.time;
+                                                    }
                                                     if (!record.timestamp || record.timestamp === '-') return '-';
                                                     let dateObj;
                                                     if (record.recordedAt) {

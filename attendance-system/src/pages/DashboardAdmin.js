@@ -350,6 +350,21 @@ setAnnouncements(res.data);
   const handleAddUserSubmit = async (e) => {
     e.preventDefault();
     setAddUserError("");
+    // Username should not contain numbers for teacher or parent
+    if ((addUserRole === 'teacher' || addUserRole === 'parent') && /\d/.test(addUserForm.username)) {
+      setAddUserError('Username should not contain numbers for teachers or parents.');
+      return;
+    }
+    // ID Number should not contain letters for teacher
+    if (addUserRole === 'teacher' && addUserForm.idNumber && /[a-zA-Z]/.test(addUserForm.idNumber)) {
+      setAddUserError('ID Number should not contain letters for teachers.');
+      return;
+    }
+    // Contact Number should not contain letters for teacher or parent
+    if ((addUserRole === 'teacher' || addUserRole === 'parent') && addUserForm.contact && /[a-zA-Z]/.test(addUserForm.contact)) {
+      setAddUserError('Contact Number should not contain letters.');
+      return;
+    }
     setAddUserLoading(true);
     try {
       // Basic validation
@@ -750,7 +765,7 @@ setAnnouncements(res.data);
         <div className="admin-main-content" style={{ marginLeft: sidebarOpen ? 260 : 0, transition: 'margin-left 0.3s' }}>
           <header className="admin-header" style={{ background: 'linear-gradient(90deg, #010662 0%, #38b2ac 100%)', color: '#fff', borderBottom: '2px solid #010662', boxShadow: '0 2px 8px rgba(1,6,98,0.08)' }}>
             <div className="admin-header-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <h2 style={{margin: '10px 0 10px 60px', fontSize:'2rem', color:'#fff', fontWeight:700, fontFamily: 'sans-serif'}}>Admin Dashboard</h2>
+              <h2 style={{margin: '10px 0 10px 60px', fontSize:'1.25rem', color:'#fff', fontWeight:700, fontFamily: 'sans-serif'}}>Admin Dashboard</h2>
               <div className="admin-user-info" style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
                 <div style={{ position: 'relative', display: 'inline-block' }}>
                   <NotificationIcon 
@@ -837,6 +852,27 @@ setAnnouncements(res.data);
                   <div style={{flex:1}} />
                   <button onClick={()=>setShowSendMessage(v=>!v)} className="dashboard-btn primary">
                     {showSendMessage ? 'Close' : '+ New Message'}
+                  </button>
+                  <button
+                    onClick={fetchAdminInbox}
+                    title="Refresh Inbox"
+                    style={{
+                      margin: '0',
+                      background: 'none',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: 40,
+                      height: 40,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      color: '#3182ce',
+                      fontSize: 26,
+                      boxShadow: '0 1px 4px rgba(49,130,206,0.08)'
+                    }}
+                  >
+                    <span role="img" aria-label="refresh">🔄</span>
                   </button>
                 </div>
                 {showSendMessage && (
@@ -944,7 +980,7 @@ setAnnouncements(res.data);
                     </form>
                   </div>
                 )}
-                <button onClick={fetchAdminInbox} style={{margin:'16px 0',padding:'8px 18px',background:'#3182ce',color:'#fff',border:'none',borderRadius:6,fontWeight:600,cursor:'pointer'}}>Refresh Inbox</button>
+                {/* Refresh button moved above, removed from here */}
                 <div style={{background: '#f7fafc', borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.07)', padding: 24, marginTop: 24}}>
                   {adminInboxLoading ? (
                     <div style={{textAlign:'center',color:'#888'}}>Loading...</div>
@@ -1194,11 +1230,30 @@ setAnnouncements(res.data);
                         </div>
                         <div className="form-group">
                           <label>Middle Name<span style={{color:'red'}}>*</span></label>
-                          <select name="middleName" value={addUserForm.middleName} onChange={handleAddUserFormChange} required>
-                            <option value="">N/A</option>
+                          <select
+                            name="middleNameSelect"
+                            value={addUserForm.middleName === '' ? '' : (addUserForm.middleName === 'N/A' ? 'N/A' : 'custom')}
+                            onChange={e => {
+                              if (e.target.value === 'N/A') {
+                                setAddUserForm(prev => ({ ...prev, middleName: 'N/A' }));
+                              } else {
+                                setAddUserForm(prev => ({ ...prev, middleName: '' }));
+                              }
+                            }}
+                            required
+                          >
+                            <option value="">Enter Middle Name</option>
                             <option value="N/A">N/A</option>
                           </select>
-                          <input name="middleName" type="text" value={addUserForm.middleName !== 'N/A' ? addUserForm.middleName : ''} onChange={handleAddUserFormChange} placeholder="Enter middle name or select N/A" disabled={addUserForm.middleName === 'N/A'} />
+                          <input
+                            name="middleName"
+                            type="text"
+                            value={addUserForm.middleName !== 'N/A' ? addUserForm.middleName : ''}
+                            onChange={e => setAddUserForm(prev => ({ ...prev, middleName: e.target.value }))}
+                            placeholder="Enter middle name or select N/A"
+                            disabled={addUserForm.middleName === 'N/A'}
+                            required={addUserForm.middleName !== 'N/A'}
+                          />
                         </div>
                       </div>
                       {/* Row 2: Contact fields */}
