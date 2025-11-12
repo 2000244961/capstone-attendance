@@ -50,12 +50,14 @@ function DashboardParent() {
       try {
         // Fetch all attendance for the date
         const allAttendance = await fetchAttendance({ date: selectedDate });
+        console.log('[DEBUG] All attendance records for date', selectedDate, allAttendance);
         // linkedStudents is now an array of string IDs
         const filtered = allAttendance.filter(a => linkedStudents.includes(a.studentId));
         setAttendance(filtered);
         // Find parent's own attendance record
         if (currentUser?._id) {
           const parentAtt = allAttendance.find(a => a.studentId === currentUser._id);
+          console.log('[DEBUG] Parent attendance record for user', currentUser._id, parentAtt);
           setParentAttendance(parentAtt || null);
         } else {
           setParentAttendance(null);
