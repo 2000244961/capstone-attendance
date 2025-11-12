@@ -98,7 +98,8 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     console.log('Received attendance POST:', req.body);
-    const { studentId, date, name, section, subject } = req.body;
+    // changes here
+    const { studentId, date, name, section, subject , status} = req.body;
     // Check for existing record for this student, subject, and date
     const existing = await Attendance.findOne({ studentId, subject, date });
     if (existing) {
