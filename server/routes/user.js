@@ -313,10 +313,10 @@ router.post('/login', async (req, res) => {
 });
 
 // <<<<<<< HEAD
-// module.exports = router;
+module.exports = router;
 // =======
-module.exports = {
-  // router,
-  announcementRouter
-};
+// module.exports = {
+//   // router,
+//   announcementRouter
+// };
 // >>>>>>> fdb8fcf697c3bfa6741e4910745af02bdca7ad1f
