@@ -1,10 +1,13 @@
+
+
 {
   "name": "capstone-attendance-server",
   "version": "1.0.0",
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "build": "",
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
