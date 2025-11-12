@@ -4,12 +4,13 @@ const nodemailer = require('nodemailer');
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 587,
-  secure: true,
+  secure: false, // ❌ was true, should be false for STARTTLS
   auth: {
     user: 'spcc10102025@gmail.com',
     pass: 'oqar slfn wbds ayia'
   }
 });
+
 
 // Debug SMTP connection on startup
 transporter.verify(function(error, success) {
