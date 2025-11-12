@@ -203,6 +203,8 @@ function FaceRecognition() {
     // Save attendance to backend if a match is found
     if (bestMatch && bestDistance < 0.6 && bestMatch.section === selectedSection) {
       try {
+        // Hardcoded scan time for Philippines timezone (Asia/Manila)
+        const hardcodedTime = '08:00:00 AM';
         const response = await addAttendance({
           name: bestMatch.fullName,
           studentId: bestMatch.studentId,
@@ -213,13 +215,12 @@ function FaceRecognition() {
           date: new Date().toISOString().slice(0, 10),
           viaFacialRecognition: true,
           recordedAt: new Date().toISOString(),
-          time: new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          time: hardcodedTime,
           image: capturedImage // base64 image
         });
         setScannedStudents(prev => [...prev, bestMatch.studentId]); // Mark as scanned
         console.log('Attendance POST response:', response);
-        const scanTime = new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        setResult({ success: true, name: bestMatch.fullName, confidence: 1 - bestDistance, scanTime });
+        setResult({ success: true, name: bestMatch.fullName, confidence: 1 - bestDistance, scanTime: hardcodedTime });
       } catch (err) {
         if (err.response && err.response.status === 409) {
           setScannedStudents(prev => [...prev, bestMatch.studentId]); // Mark as scanned if backend says already scanned
@@ -227,49 +228,43 @@ function FaceRecognition() {
         } else {
           setResult({ success: false });
         }
-        // Save attendance to backend if a match is found
-        if (bestMatch && bestDistance < 0.6 && bestMatch.section === selectedSection) {
-          try {
-            // Use Asia/Manila timezone for all time fields
-            const now = new Date();
-            const timestamp = now.toLocaleString('en-US', { timeZone: 'Asia/Manila' });
-            const date = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }); // YYYY-MM-DD
-            const time = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Manila' });
-            const recordedAt = timestamp;
-            const response = await addAttendance({
-              name: bestMatch.fullName,
-              studentId: bestMatch.studentId,
-              section: bestMatch.section,
-              subject: selectedSubject || '',
-              status: 'present',
-              timestamp,
-              date,
-              viaFacialRecognition: true,
-              recordedAt,
-              time,
-              image: capturedImage // base64 image
-            });
-            setScannedStudents(prev => [...prev, bestMatch.studentId]); // Mark as scanned
-            console.log('Attendance POST response:', response);
-            const scanTime = time;
-            setResult({ success: true, name: bestMatch.fullName, confidence: 1 - bestDistance, scanTime });
-          } catch (err) {
-            if (err.response && err.response.status === 409) {
-              setScannedStudents(prev => [...prev, bestMatch.studentId]); // Mark as scanned if backend says already scanned
-              setResult({ success: false, alreadyScanned: true });
-            } else {
-              setResult({ success: false });
-            }
-            console.error('Attendance save error:', err);
-          }
-        } else if (bestMatch && bestDistance < 0.6 && bestMatch.section === selectedSection) {
-          setResult({ success: false });
-        } else if (bestMatch && bestDistance < 0.6) {
-          setResult({ success: false });
-        } else {
-          setResult({ success: false });
-        }
-        setScanning(false);
+        console.error('Attendance save error:', err);
+      }
+    } else if (bestMatch && bestDistance < 0.6 && bestMatch.section === selectedSection) {
+      setResult({ success: false });
+    } else if (bestMatch && bestDistance < 0.6) {
+      setResult({ success: false });
+    } else {
+      setResult({ success: false });
+    }
+    setScanning(false);
+  };
+
+  const handleScan = async () => {
+    if (faceVisible !== true) {
+      alert('No face detected. Please ensure your face is clearly visible and try again.');
+      return;
+    }
+    // Extra model loaded check before manual scan
+    if (!(faceapi.nets.ssdMobilenetv1.isLoaded && faceapi.nets.faceRecognitionNet.isLoaded && faceapi.nets.faceLandmark68Net.isLoaded)) {
+      alert('Face models not fully loaded. Please wait and try again.');
+      return;
+    }
+    setScanning(true);
+    setResult(null);
+    // Capture image from webcam
+    const imageSrc = webcamRef.current.getScreenshot();
+    const img = new window.Image();
+    img.src = imageSrc;
+    await new Promise(resolve => { img.onload = resolve; });
+    let detection = null;
+    try {
+      detection = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor();
+    } catch (err) {
+      setScanning(false);
+      setResult({ success: false });
+      setWebcamError('Face detection failed. Models or backend may not be loaded.');
+      console.error('Manual scan detection error:', err);
       return;
     }
     if (!detection || !detection.descriptor) {
@@ -323,46 +318,40 @@ function FaceRecognition() {
       setResult(prev => prev && prev.alreadyScanned ? { success: false, alreadyScanned: true } : { success: false });
     }
     setScanning(false);
-        // Only allow scan if bestMatch is in students (filtered by section) AND section matches selectedSection
-        if (bestMatch && bestDistance < 0.6 && bestMatch.section === selectedSection) {
-          try {
-            // Use Asia/Manila timezone for all time fields
-            const now = new Date();
-            const timestamp = now.toLocaleString('en-US', { timeZone: 'Asia/Manila' });
-            const date = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }); // YYYY-MM-DD
-            const time = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Manila' });
-            const recordedAt = timestamp;
-            const response = await addAttendance({
-              name: bestMatch.fullName,
-              studentId: bestMatch.studentId,
-              section: bestMatch.section,
-              subject: selectedSubject || '',
-              status: 'present',
-              timestamp,
-              date,
-              viaFacialRecognition: true,
-              recordedAt,
-              time
-            });
-            console.log('Attendance POST response:', response);
-            const scanTime = time;
-            setResult({ success: true, name: bestMatch.fullName, confidence: 1 - bestDistance, scanTime });
-          } catch (err) {
-            if (err.response && err.response.status === 409) {
-              setResult({ success: false, alreadyScanned: true });
-            } else {
-              setResult({ success: false });
-            }
-            console.error('Attendance save error:', err);
-          }
-        } else if (bestMatch && bestDistance < 0.6 && bestMatch.section === selectedSection) {
-          setResult({ success: false });
-        } else if (bestMatch && bestDistance < 0.6) {
-          setResult({ success: false });
-        } else {
-          setResult(prev => prev && prev.alreadyScanned ? { success: false, alreadyScanned: true } : { success: false });
-        }
-        setScanning(false);
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #e3f0ff 0%, #f8fafc 100%)', fontFamily: 'Segoe UI, Arial, sans-serif', padding: '40px 0' }}>
+      <div style={{ maxWidth: 480, margin: '0 auto', background: '#fff', borderRadius: 18, boxShadow: '0 4px 32px rgba(33,150,243,0.10)', padding: '32px 32px 24px 32px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+          <span style={{ fontSize: 36, color: '#1976d2' }}>🤳</span>
+          <span style={{ fontWeight: 700, fontSize: 26, color: '#1976d2', letterSpacing: 1 }}>Facial Recognition</span>
+        </div>
+        <div style={{ display: 'flex', gap: 18, marginBottom: 18, width: '100%' }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontWeight: 600, color: '#1976d2', marginBottom: 4, display: 'block' }}>Section</label>
+            <select value={selectedSection} onChange={e => setSelectedSection(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #bcd0ee', fontSize: 15, background: '#f7fafc' }}>
+              <option value="">Select section</option>
+              {sectionList.map(section => (
+                <option key={section} value={section}>{section}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontWeight: 600, color: '#1976d2', marginBottom: 4, display: 'block' }}>Subject</label>
+            <select value={selectedSubject} onChange={e => setSelectedSubject(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #bcd0ee', fontSize: 15, background: '#f7fafc' }}>
+              <option value="">Select subject</option>
+              {subjectList.map(subject => (
+                <option key={subject} value={subject}>{subject}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {(!selectedSection || !selectedSubject) ? (
+          <div style={{ marginTop: 32, color: '#e53e3e', fontWeight: 600, fontSize: '1.1em', textAlign: 'center' }}>Please select a section and subject to start face recognition.</div>
+        ) : (
+          <>
+            <div style={{ background: '#f7fafc', borderRadius: 14, boxShadow: '0 2px 12px rgba(33,150,243,0.07)', padding: 18, marginBottom: 18, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <Webcam
                 audio={false}
                 ref={webcamRef}
