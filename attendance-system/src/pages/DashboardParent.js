@@ -28,6 +28,7 @@ function DashboardParent() {
       if (!currentUser?._id) return;
       try {
         const profile = await fetchUserProfile(currentUser._id);
+        // linkedStudent is now an array of string IDs
         setLinkedStudents(profile.linkedStudent || []);
       } catch (e) {
         setLinkedStudents([]);
@@ -47,9 +48,8 @@ function DashboardParent() {
       try {
         // Fetch all attendance for the date
         const allAttendance = await fetchAttendance({ date: selectedDate });
-        // Filter for linked students
-        const linkedIds = linkedStudents.map(s => s._id || s.id || s);
-        const filtered = allAttendance.filter(a => linkedIds.includes(a.studentId));
+        // linkedStudents is now an array of string IDs
+        const filtered = allAttendance.filter(a => linkedStudents.includes(a.studentId));
         setAttendance(filtered);
       } catch (e) {
         setAttendance([]);
@@ -114,11 +114,11 @@ function DashboardParent() {
                   </tr>
                 </thead>
                 <tbody>
-                  {linkedStudents.map(student => {
-                    const att = attendance.find(a => a.studentId === (student._id || student.id || student));
+                  {linkedStudents.map(studentId => {
+                    const att = attendance.find(a => a.studentId === studentId);
                     return (
-                      <tr key={student._id || student.id || student}>
-                        <td style={{ padding: 8, border: '1px solid #e3e3e3' }}>{student.fullName || student.name || student.username || student._id || student.id || student}</td>
+                      <tr key={studentId}>
+                        <td style={{ padding: 8, border: '1px solid #e3e3e3' }}>{studentId}</td>
                         <td style={{ padding: 8, border: '1px solid #e3e3e3' }}>{att ? att.status : 'Absent'}</td>
                         <td style={{ padding: 8, border: '1px solid #e3e3e3' }}>{att ? (att.time || '-') : '-'}</td>
                       </tr>
