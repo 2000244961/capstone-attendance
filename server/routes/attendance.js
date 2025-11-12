@@ -1,5 +1,6 @@
 const express = require('express');
 const Attendance = require('../models/Attendance');
+const Student = require('../models/Student');
 const { sendMail } = require('../utils/mailer');
 const { findParentEmailByStudentId } = require('../utils/findParentEmail');
 const router = express.Router();
@@ -148,7 +149,12 @@ router.post('/', async (req, res) => {
 
     // Notify parent by email (if found)
     try {
-      const parentEmail = await findParentEmailByStudentId(studentId);
+      const student = await Student.findOne({ studentId: studentId });
+      if (!student) {
+        res.status(404).json({ error: 'Student not found' });
+      }
+      
+      const parentEmail = await findParentEmailByStudentId(student._id);
       let scanTime = req.body.time;
       let formattedTime = '';
       if (scanTime) {
