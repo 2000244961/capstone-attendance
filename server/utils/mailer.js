@@ -3,7 +3,7 @@ const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
-  port: 587,
+  port: 465,
   secure: true, // ❌ was true, should be false for STARTTLS
   auth: {
     user: 'spcc10102025@gmail.com',
