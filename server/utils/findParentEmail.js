@@ -4,7 +4,6 @@ const mongoose = require('mongoose');
 async function findParentEmailByStudentId(studentId) {
   // Normalize studentId
   const User = mongoose.model('User');
-  const student = await Student.findOne({ studentId: studentId.toString() });
   const studentObjId = String(studentId);
   console.log("studentObjId", studentObjId);
 
