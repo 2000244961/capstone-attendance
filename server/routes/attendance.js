@@ -159,6 +159,7 @@ router.post('/', async (req, res) => {
       }
       
       const parentEmail = await findParentEmailByStudentId(student._id);
+      console.log('parent', parentEmail);
       let scanTime = req.body.time;
       let formattedTime = '';
       if (scanTime) {
