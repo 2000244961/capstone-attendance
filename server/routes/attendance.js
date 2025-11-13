@@ -153,7 +153,7 @@ router.post('/', async (req, res) => {
       // Student model (define if not exists)
       const Student = mongoose.model('Student');
 
-      const student = await Student.findOne({ studentId: studentId });
+      const student = await Student.findOne({ studentId: studentId.toString() });
       if (!student) {
         res.status(404).json({ error: 'Student not found' });
       }
