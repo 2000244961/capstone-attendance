@@ -166,15 +166,15 @@ router.post('/', async (req, res) => {
       parent = await User.findOne({
         type: 'parent',
         linkedStudent: mongoose.Types.ObjectId.isValid(student._id.toString())
-          ? { $in: [new mongoose.Types.ObjectId(student._id.toString())] }
-          : { $in: [student._id.toString()] }
+          ? { $in: [new mongoose.Types.ObjectId(student._id)] }
+          : { $in: [student._id] }
       });
       
       console.log("beforeRetry", parent);
       if (!parent) {
         parent = await User.findOne({
           type: 'parent',
-          linkedStudent: { $in: [student._id.toString()] }
+          linkedStudent: { $in: [student._id)] }
         });
       }
     
