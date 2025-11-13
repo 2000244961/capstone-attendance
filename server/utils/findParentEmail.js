@@ -13,10 +13,17 @@ async function findParentEmailByStudentId(studentId) {
       ? new mongoose.Types.ObjectId(studentObjId)
       : studentIdStr
   });
+  if (!parent) {
+    parent = await User.findOne({
+      type: 'parent',
+      linkedStudent: studentObjId
+    });
+  }
 
   if (!parent) {
-    return null
+    return null;
   }
+  
 
   if (parent?.email) return parent.email;
 
