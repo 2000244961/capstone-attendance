@@ -164,7 +164,7 @@ router.post('/', async (req, res) => {
     
       // 1️⃣ Try direct ObjectId match (if linkedStudent stores ObjectId)
       let parent = null;
-      parent = await UserSchema.findOne({
+      parent = await UserSchema.find({
         type: 'parent',
         linkedStudent: mongoose.Types.ObjectId.isValid(student._id)
           ? { $in: [new mongoose.Types.ObjectId(student._id)] }
@@ -173,7 +173,7 @@ router.post('/', async (req, res) => {
       
       console.log("beforeRetry", parent);
       if (!parent || parent == null || parent == undefined) {
-        parent = await User.findOne({
+        parent = await User.find({
           type: 'parent',
           linkedStudent: { $in: [student._id] }
         });
@@ -185,13 +185,17 @@ router.post('/', async (req, res) => {
           type: 'parent',
           linkedStudent: { $in: [new mongoose.Types.ObjectId(student._id)] }
         });
-        console.log(parent);
+        console.log(parent[0]?.email);
       }
     
       console.log("afterRetry", parent);
       
       // const parentEmail = await findParentEmailByStudentId(student._id);
-      const parentEmail = parent?.email;
+      let parentEmail = parent?.email;
+      if (parentEmail === undefined) {
+        parentEmail = parent[0]?.email
+        console.log("here");
+      }
       console.log('parent', parentEmail);
       let scanTime = req.body.time;
       let formattedTime = '';
