@@ -193,10 +193,27 @@ router.post('/', async (req, res) => {
           type: 'parent',
           linkedStudent: { $in: [idToSearch] }
         });
-        console.log(parent[0]?.email);
+        console.log(parent)
       }
     
       console.log("afterRetry", parent);
+       if (!parent || parent == null || parent == undefined) {
+            parent = await User.find({type: 'parent'});
+    console.log('User list response:', users);
+    // Always include linkedStudent for parent users
+    parent = users.map(u => {
+        if (
+          u.type === 'parent' &&
+          Array.isArray(u.linkedStudent) &&
+          u.linkedStudent.includes(idToSearch)
+        ) {
+          console.log(`[USER LIST] Parent ${u.username} linkedStudent:`, u.linkedStudent);
+          return { ...u.toObject(), linkedStudent: u.linkedStudent };
+        }
+        return u;
+      });
+
+      }
       
       // const parentEmail = await findParentEmailByStudentId(student._id);
       let parentEmail = parent?.email;
