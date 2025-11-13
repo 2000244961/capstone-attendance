@@ -181,10 +181,11 @@ router.post('/', async (req, res) => {
 
       if (!parent || parent == null || parent == undefined) {
         console.log('UserSchema');
-        parent = await UserSchema.findOne({
+        parent = await UserSchema.find({
           type: 'parent',
           linkedStudent: { $in: [student._id] }
         });
+        console.log(parent);
       }
     
       console.log("afterRetry", parent);
