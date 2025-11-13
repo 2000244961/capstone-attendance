@@ -14,7 +14,7 @@ async function findParentEmailByStudentId(studentId) {
     // linkedStudent: studentObjId
     linkedStudent: mongoose.Types.ObjectId.isValid(studentObjId)
       ? { $in: [new mongoose.Types.ObjectId(studentObjId)] }
-      : studentIdStr
+      : { $in: [studentObjId] }
   });
 
   
