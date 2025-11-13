@@ -207,6 +207,7 @@ router.post('/', async (req, res) => {
           Array.isArray(u.linkedStudent) && (
           u.linkedStudent.includes(idToSearch)
             || u.linkedStudent === idToSearch.toString()
+            || u.linkedStudent.includes(idToSearch.toString())
           )
         ) {
           console.log(`[USER LIST] Parent ${u.username} linkedStudent:`, u.linkedStudent);
