@@ -161,14 +161,21 @@ router.post('/', async (req, res) => {
       }
       
       console.log("studentObjId", student._id.toString());
+
+      const idToSearch = mongoose.Types.ObjectId.isValid(student._id)
+  ? new mongoose.Types.ObjectId(student._id)
+  : student._id; // fallback to string if not ObjectId
+
+// const parent = await User.findOne({
+//   type: 'parent',
+//   linkedStudent: { $in: [idToSearch] } // correct structure
+// });
     
       // 1️⃣ Try direct ObjectId match (if linkedStudent stores ObjectId)
       let parent = null;
       parent = await UserSchema.find({
         type: 'parent',
-        linkedStudent: mongoose.Types.ObjectId.isValid(student._id)
-          ? { $in: [new mongoose.Types.ObjectId(student._id)] }
-          : { $in: [student._id] }
+        linkedStudent: { $in: [idToSearch] }
       });
       
       console.log("beforeRetry", parent);
@@ -183,7 +190,7 @@ router.post('/', async (req, res) => {
         console.log('UserSchema');
         parent = await UserSchema.find({
           type: 'parent',
-          linkedStudent: { $in: [new mongoose.Types.ObjectId(student._id)] }
+          linkedStudent: { $in: [idToSearch] }
         });
         console.log(parent[0]?.email);
       }
