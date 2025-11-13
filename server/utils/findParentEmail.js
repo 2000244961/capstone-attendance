@@ -21,7 +21,7 @@ async function findParentEmailByStudentId(studentId) {
   if (!parent) {
     parent = await User.findOne({
       type: 'parent',
-      linkedStudent: $in: [studentObjId.toString()] }
+      linkedStudent: { $in: [studentObjId.toString()] }
     });
   }
 
