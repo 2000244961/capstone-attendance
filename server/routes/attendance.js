@@ -181,7 +181,7 @@ router.post('/', async (req, res) => {
 
       if (!parent || parent == null || parent == undefined) {
         console.log('UserSchema');
-        parent = UserSchema.findOne({
+        parent = await UserSchema.findOne({
           type: 'parent',
           linkedStudent: { $in: [student._id] }
         });
