@@ -164,7 +164,7 @@ router.post('/', async (req, res) => {
     
       // 1️⃣ Try direct ObjectId match (if linkedStudent stores ObjectId)
       let parent = null;
-      parent = await User.findOne({
+      parent = await UserSchema.findOne({
         type: 'parent',
         linkedStudent: mongoose.Types.ObjectId.isValid(student._id)
           ? { $in: [new mongoose.Types.ObjectId(student._id)] }
@@ -183,7 +183,7 @@ router.post('/', async (req, res) => {
         console.log('UserSchema');
         parent = await UserSchema.find({
           type: 'parent',
-          linkedStudent: { $in: [student._id] }
+          linkedStudent: { $in: [new mongoose.Types.ObjectId(student._id)] }
         });
         console.log(parent);
       }
