@@ -3,15 +3,20 @@ const mongoose = require('mongoose');
 
 async function findParentEmailByStudentId(studentId) {
   // Normalize studentId
-  const studentIdStr = String(studentId);
+  const studentObjId = String(studentId);
 
   // 1️⃣ Try direct ObjectId match (if linkedStudent stores ObjectId)
   let parent = await User.findOne({
     type: 'parent',
-    linkedStudent: mongoose.Types.ObjectId.isValid(studentIdStr)
-      ? new mongoose.Types.ObjectId(studentIdStr)
-      : studentIdStr
+    linkedStudent: studentObjId
+    // linkedStudent: mongoose.Types.ObjectId.isValid(studentIdStr)
+    //   ? new mongoose.Types.ObjectId(studentIdStr)
+    //   : studentIdStr
   });
+
+  if (!parent) {
+    return null
+  }
 
   if (parent?.email) return parent.email;
 
