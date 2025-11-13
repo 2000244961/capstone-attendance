@@ -189,7 +189,7 @@ router.post('/', async (req, res) => {
 
       if (!parent || parent == null || parent == undefined) {
         console.log('UserSchema');
-        parent = await UserSchema.findOne({
+        parent = await User.findOne({
           type: 'parent',
           linkedStudent: { $in: [idToSearch] }
         });
@@ -201,7 +201,7 @@ router.post('/', async (req, res) => {
             parent = await UserSchema.find({type: 'parent'});
     console.log('User list response:', parent);
     // Always include linkedStudent for parent users
-    parent = users.map(u => {
+    parent = parent.map(u => {
         if (
           u.type === 'parent' &&
           Array.isArray(u.linkedStudent) &&
