@@ -1,6 +1,7 @@
 const express = require('express');
 const Attendance = require('../models/Attendance');
 // const Student = require('../models/Student');
+const UserSchema = require('../models/User');
 const mongoose = require('mongoose');
 const { sendMail } = require('../utils/mailer');
 const { findParentEmailByStudentId } = require('../utils/findParentEmail');
@@ -171,8 +172,16 @@ router.post('/', async (req, res) => {
       });
       
       console.log("beforeRetry", parent);
-      if (!parent) {
+      if (!parent || parent == null || parent == undefined) {
         parent = await User.findOne({
+          type: 'parent',
+          linkedStudent: { $in: [student._id] }
+        });
+      }
+
+      if (!parent || parent == null || parent == undefined) {
+        console.log('UserSchema');
+        parent = UserSchema.findOne({
           type: 'parent',
           linkedStudent: { $in: [student._id] }
         });
