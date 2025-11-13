@@ -198,8 +198,8 @@ router.post('/', async (req, res) => {
     
       console.log("afterRetry", parent);
        if (!parent || parent == null || parent == undefined) {
-            parent = await User.find({type: 'parent'});
-    console.log('User list response:', users);
+            parent = await UserSchema.find({type: 'parent'});
+    console.log('User list response:', parent);
     // Always include linkedStudent for parent users
     parent = users.map(u => {
         if (
