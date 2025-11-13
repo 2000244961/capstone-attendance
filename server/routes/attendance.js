@@ -1,6 +1,7 @@
 const express = require('express');
 const Attendance = require('../models/Attendance');
-const Student = require('../models/Student');
+// const Student = require('../models/Student');
+const mongoose = require('mongoose');
 const { sendMail } = require('../utils/mailer');
 const { findParentEmailByStudentId } = require('../utils/findParentEmail');
 const router = express.Router();
@@ -149,6 +150,17 @@ router.post('/', async (req, res) => {
 
     // Notify parent by email (if found)
     try {
+      // Student model (define if not exists)
+      const Student = mongoose.model('Student', new mongoose.Schema({
+        fullName: String,
+        studentId: String,
+        section: String,
+        subject: String,
+        photo: String,
+        status: String,
+        descriptor: [Number] // Face descriptor for recognition
+      }));
+
       const student = await Student.findOne({ studentId: studentId });
       if (!student) {
         res.status(404).json({ error: 'Student not found' });
