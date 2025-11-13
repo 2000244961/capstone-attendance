@@ -152,13 +152,39 @@ router.post('/', async (req, res) => {
     try {
       // Student model (define if not exists)
       const Student = mongoose.model('Student');
+      const User = mongoose.model('User');
 
       const student = await Student.findOne({ studentId: studentId.toString() });
       if (!student) {
         res.status(404).json({ error: 'Student not found' });
       }
+
       
-      const parentEmail = await findParentEmailByStudentId(student._id);
+      const student = await Student.findOne({ studentId: studentId.toString() });
+      const studentObjId = String(studentId);
+      console.log("studentObjId", studentObjId);
+    
+      // 1️⃣ Try direct ObjectId match (if linkedStudent stores ObjectId)
+      let parent = null;
+      parent = await User.findOne({
+        type: 'parent',
+        linkedStudent: mongoose.Types.ObjectId.isValid(studentObjId)
+          ? { $in: [new mongoose.Types.ObjectId(studentObjId)] }
+          : studentIdStr
+      });
+      
+      console.log("beforeRetry", parent);
+      if (!parent) {
+        parent = await User.findOne({
+          type: 'parent',
+          linkedStudent: { $in: [studentObjId.toString()] }
+        });
+      }
+    
+      console.log("afterRetry", parent);
+      
+      // const parentEmail = await findParentEmailByStudentId(student._id);
+      const parentEmail = parent?.email;
       console.log('parent', parentEmail);
       let scanTime = req.body.time;
       let formattedTime = '';
