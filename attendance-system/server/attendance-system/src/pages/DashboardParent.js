@@ -37,7 +37,7 @@ function DashboardParent() {
           </div>
         </div>
         <div style={{ fontSize: '1.2rem', fontWeight: 500, marginTop: 8, marginBottom: 4 }}>Welcome, {parentName}</div>
-        <div style={{marginTop:4,fontSize:'0.5rem',color:'#e0e8f3',fontWeight:500}}>
+        <div style={{marginTop:4,fontSize:'1rem',color:'#e0e8f3',fontWeight:500}}>
           Unread Messages: <span style={{color:'#ffd700'}}>{unreadInboxCount}</span>
         </div>
       </header>
