@@ -166,7 +166,7 @@ router.post('/', async (req, res) => {
       parent = await User.findOne({
         type: 'parent',
         linkedStudent: mongoose.Types.ObjectId.isValid(student._id)
-          ? { $in: [new mongoose.Types.ObjectId(student._id] }
+          ? { $in: [new mongoose.Types.ObjectId(student._id)] }
           : { $in: [student._id] }
       });
       
