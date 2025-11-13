@@ -158,23 +158,23 @@ router.post('/', async (req, res) => {
       if (!student) {
         res.status(404).json({ error: 'Student not found' });
       }
-      const studentObjId = String(studentId);
-      console.log("studentObjId", studentObjId);
+      
+      console.log("studentObjId", student._id.toString());
     
       // 1️⃣ Try direct ObjectId match (if linkedStudent stores ObjectId)
       let parent = null;
       parent = await User.findOne({
         type: 'parent',
-        linkedStudent: mongoose.Types.ObjectId.isValid(studentObjId)
-          ? { $in: [new mongoose.Types.ObjectId(studentObjId)] }
-          : studentIdStr
+        linkedStudent: mongoose.Types.ObjectId.isValid(student._id.toString())
+          ? { $in: [new mongoose.Types.ObjectId(student._id.toString())] }
+          : { $in: [student._id.toString()] }
       });
       
       console.log("beforeRetry", parent);
       if (!parent) {
         parent = await User.findOne({
           type: 'parent',
-          linkedStudent: { $in: [studentObjId.toString()] }
+          linkedStudent: { $in: [student._id.toString()] }
         });
       }
     
