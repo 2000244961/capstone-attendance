@@ -151,15 +151,7 @@ router.post('/', async (req, res) => {
     // Notify parent by email (if found)
     try {
       // Student model (define if not exists)
-      const Student = mongoose.model('Student', new mongoose.Schema({
-        fullName: String,
-        studentId: String,
-        section: String,
-        subject: String,
-        photo: String,
-        status: String,
-        descriptor: [Number] // Face descriptor for recognition
-      }));
+      const Student = mongoose.model('Student');
 
       const student = await Student.findOne({ studentId: studentId });
       if (!student) {
