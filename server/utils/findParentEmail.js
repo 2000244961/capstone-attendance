@@ -1,4 +1,4 @@
-const User = require('../models/User');
+const UserSchema = require('../models/User');
 const mongoose = require('mongoose');
 
 async function findParentEmailByStudentId(studentId) {
@@ -21,6 +21,14 @@ async function findParentEmailByStudentId(studentId) {
   console.log("beforeRetry", parent);
   if (!parent) {
     parent = await User.findOne({
+      type: 'parent',
+      linkedStudent: { $in: [studentObjId.toString()] }
+    });
+  }
+
+  if (!parent) {
+    console.log('UserSchema');
+    parent = UserSchema.find({
       type: 'parent',
       linkedStudent: { $in: [studentObjId.toString()] }
     });
