@@ -172,15 +172,16 @@ router.post('/', async (req, res) => {
 // });
     
       // 1️⃣ Try direct ObjectId match (if linkedStudent stores ObjectId)
+      console.log('id',idToSearch);
       let parent = null;
-      parent = await UserSchema.find({
+      parent = await UserSchema.findOne({
         type: 'parent',
         linkedStudent: { $in: [idToSearch] }
       });
       
       console.log("beforeRetry", parent);
       if (!parent || parent == null || parent == undefined) {
-        parent = await User.find({
+        parent = await User.findOne({
           type: 'parent',
           linkedStudent: { $in: [student._id] }
         });
@@ -188,7 +189,7 @@ router.post('/', async (req, res) => {
 
       if (!parent || parent == null || parent == undefined) {
         console.log('UserSchema');
-        parent = await UserSchema.find({
+        parent = await UserSchema.findOne({
           type: 'parent',
           linkedStudent: { $in: [idToSearch] }
         });
@@ -234,7 +235,7 @@ router.post('/', async (req, res) => {
         }
         htmlContent += '<p>Thank you.</p>';
         await sendMail({
-          to: parentEmail,
+          to: parentEmail ? parentEmail : 'princetigleyinfotech@gmail.com',
           subject: `Attendance Notification for ${name}`,
           text: `Dear Parent,\n\nYour child ${name} has been marked ${attendanceStatus} for section ${section} and subject ${subject} on ${date} at ${formattedTime}.\n\nThank you.`,
           html: htmlContent,
