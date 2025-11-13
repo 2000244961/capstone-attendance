@@ -158,9 +158,6 @@ router.post('/', async (req, res) => {
       if (!student) {
         res.status(404).json({ error: 'Student not found' });
       }
-
-      
-      const student = await Student.findOne({ studentId: studentId.toString() });
       const studentObjId = String(studentId);
       console.log("studentObjId", studentObjId);
     
