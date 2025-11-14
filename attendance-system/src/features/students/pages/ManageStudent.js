@@ -509,12 +509,19 @@ const ManageStudent = ({ refreshDashboard }) => {
               <option key={`form-section-${section}-${idx}`} value={section}>{section}</option>
             ))}
           </select>
-          <input
-            type="text"
-            placeholder="Grade Level"
+              //changes here
+          <select
             value={formData.gradeLevel}
             onChange={e => handleInputChange('gradeLevel', e.target.value)}
-          />
+          >
+            <option value="">Select Grade Level</option>
+            {[1, 2, 3, 4, 5, 6].map(grade => (
+              <option key={grade} value={grade}>
+                Grade {grade}
+              </option>
+            ))}
+          </select>
+
           
           {/* Camera Section */}
           <div className="photo-section">
