@@ -57,8 +57,24 @@ const INITIAL_FORM_DATA = {
   photo: null,
 };
 
+const LOCAL_BATCH_KEY = 'batch_students';
+
+function getBatchStudents() {
+  try {
+    const data = localStorage.getItem(LOCAL_BATCH_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveBatchStudents(students) {
+  localStorage.setItem(LOCAL_BATCH_KEY, JSON.stringify(students));
+}
+
 const ManageStudent = ({ refreshDashboard }) => {
-  const [students, setStudents] = useState([]);
+  const [backendStudents, setBackendStudents] = useState([]);
+  const [batchStudents, setBatchStudents] = useState(getBatchStudents());
   const [faceVisible, setFaceVisible] = useState(null);
   const [cameraInterval, setCameraInterval] = useState(null);
   const [searchSection, setSearchSection] = useState('');
@@ -92,6 +108,46 @@ const ManageStudent = ({ refreshDashboard }) => {
     loadSections();
   }, []);
 
+  // Fetch backend students on mount
+  useEffect(() => {
+    const initializeComponent = async () => {
+      try {
+        await loadFaceApiModels();
+      } catch (modelError) {
+        console.error('Error loading face-api.js models:', modelError);
+        alert('Failed to load face detection models. Please check /models files and refresh the page.');
+        setIsLoading(false);
+        return;
+      }
+      try {
+        const dbStudents = await fetchStudents();
+        const processedStudents = await Promise.all(dbStudents.map(async s => {
+          if (s.photo) {
+            if (typeof s.photo === 'string') {
+              return { ...s };
+            }
+            if (s.photo instanceof Blob) {
+              const reader = new FileReader();
+              const base64 = await new Promise(resolve => {
+                reader.onloadend = () => resolve(reader.result);
+                reader.readAsDataURL(s.photo);
+              });
+              return { ...s, photo: base64 };
+            }
+          }
+          return { ...s, photo: null };
+        }));
+        setBackendStudents(processedStudents);
+        setIsLoading(false);
+      } catch (apiError) {
+        console.error('Error fetching students:', apiError);
+        alert('Failed to fetch students from database. Please check your backend and refresh the page.');
+        setIsLoading(false);
+      }
+    };
+    initializeComponent();
+  }, []);
+
   // Batch upload handler
   const handleBatchClick = () => excelInputRef.current.click();
 
@@ -102,29 +158,24 @@ const ManageStudent = ({ refreshDashboard }) => {
     const data = await file.arrayBuffer();
     const workbook = XLSX.read(data, { type: 'array' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const batchStudents = XLSX.utils.sheet_to_json(sheet);
+    const batchStudentsFromFile = XLSX.utils.sheet_to_json(sheet);
 
-    for (const s of batchStudents) {
-      try {
-        if (!s.fullName || !s.studentId || !s.section || !s.gradeLevel) continue;
-        await addStudent({
-          ...s,
-          descriptor: [],
-          photo: null,
-          status: 'Active',
-        });
-      } catch (err) {
-        console.error(`Failed to add student ${s.fullName}:`, err);
-      }
-    }
+    // Only add students with all required fields
+    const newBatch = batchStudentsFromFile
+      .filter(s => s.fullName && s.studentId && s.section && s.gradeLevel)
+      .map(s => ({
+        ...s,
+        descriptor: [],
+        photo: null,
+        status: 'Active',
+        _localOnly: true, // Mark as local-only for clarity
+      }));
 
-    const dbStudents = await fetchStudents();
-    setStudents(dbStudents);
+    const updatedBatch = [...batchStudents, ...newBatch];
+    setBatchStudents(updatedBatch);
+    saveBatchStudents(updatedBatch);
 
-    // Save to localStorage as well
-    localStorage.setItem('students', JSON.stringify(dbStudents));
-
-    alert(`Batch registration completed: ${batchStudents.length} students processed.`);
+    alert(`Batch registration completed: ${newBatch.length} students processed.`);
   };
 
   // Live face detection in webcam
@@ -174,14 +225,14 @@ const ManageStudent = ({ refreshDashboard }) => {
   // Group students by section and subject
   const groupBySectionSubject = useCallback(() => {
     const groups = {};
-    students.forEach(student => {
+    allStudents.forEach(student => {
       const key = `${student.section} - ${student.subject}`;
       if (!groups[key]) groups[key] = [];
       groups[key].push(student);
     });
     setGroupedStudents(groups);
     setShowGroupModal(true);
-  }, [students]);
+  }, [backendStudents, batchStudents]);
 
   // Add missing function definitions
   const handleFormSubmit = (e) => {
@@ -223,48 +274,16 @@ const ManageStudent = ({ refreshDashboard }) => {
     }
   }, [cameraInterval]);
 
-  // Load face detection models and fetch students from backend
-  useEffect(() => {
-    const initializeComponent = async () => {
-      try {
-        await loadFaceApiModels();
-      } catch (modelError) {
-        console.error('Error loading face-api.js models:', modelError);
-        alert('Failed to load face detection models. Please check /models files and refresh the page.');
-        setIsLoading(false);
-        return;
-      }
-      try {
-        const dbStudents = await fetchStudents();
-        const processedStudents = await Promise.all(dbStudents.map(async s => {
-          if (s.photo) {
-            if (typeof s.photo === 'string') {
-              return { ...s };
-            }
-            if (s.photo instanceof Blob) {
-              const reader = new FileReader();
-              const base64 = await new Promise(resolve => {
-                reader.onloadend = () => resolve(reader.result);
-                reader.readAsDataURL(s.photo);
-              });
-              return { ...s, photo: base64 };
-            }
-          }
-          return { ...s, photo: null };
-        }));
-        setStudents(processedStudents);
-        setIsLoading(false);
-      } catch (apiError) {
-        console.error('Error fetching students:', apiError);
-        alert('Failed to fetch students from database. Please check your backend and refresh the page.');
-        setIsLoading(false);
-      }
-    };
-    initializeComponent();
-  }, []);
+  // Merge backend and batch students for display
+  const allStudents = useMemo(() => {
+    // Avoid duplicate studentId (backend takes priority)
+    const backendIds = new Set(backendStudents.map(s => s.studentId));
+    const filteredBatch = batchStudents.filter(s => !backendIds.has(s.studentId));
+    return [...backendStudents, ...filteredBatch];
+  }, [backendStudents, batchStudents]);
 
   const filteredStudents = useMemo(() => {
-    let filtered = students;
+    let filtered = allStudents;
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(student =>
@@ -279,7 +298,7 @@ const ManageStudent = ({ refreshDashboard }) => {
       filtered = filtered.filter(student => student.subject === searchSubject);
     }
     return filtered;
-  }, [students, searchQuery, searchSection, searchSubject]);
+  }, [allStudents, searchQuery, searchSection, searchSubject]);
 
   const resetForm = useCallback(() => {
     setFormData(INITIAL_FORM_DATA);
@@ -347,7 +366,7 @@ const ManageStudent = ({ refreshDashboard }) => {
         photoUrl = null;
       }
     } else if (formMode === 'edit' && selectedIndex !== null) {
-      const existingStudent = students[selectedIndex];
+      const existingStudent = allStudents[selectedIndex];
       descriptor = existingStudent.descriptor;
       if (!Array.isArray(descriptor) || descriptor.length !== 128 || descriptor.some(isNaN)) {
         alert('Existing face descriptor is invalid. Please update the photo.');
@@ -384,7 +403,7 @@ const ManageStudent = ({ refreshDashboard }) => {
         result = await addStudent(studentData);
         updateSubjectStudentCount(subjectInfo, 1);
       } else {
-        result = await updateStudent(students[selectedIndex]._id, studentData);
+        result = await updateStudent(allStudents[selectedIndex]._id, studentData);
       }
       const dbStudents = await fetchStudents();
       const processedStudents = await Promise.all(dbStudents.map(async s => {
@@ -403,7 +422,7 @@ const ManageStudent = ({ refreshDashboard }) => {
         }
         return { ...s, photo: null };
       }));
-      setStudents(processedStudents);
+      setBackendStudents(processedStudents);
       resetForm();
       alert(`Student ${formMode === 'add' ? 'registered' : 'updated'} successfully!`);
     } catch (error) {
@@ -414,7 +433,7 @@ const ManageStudent = ({ refreshDashboard }) => {
     formData,
     formMode,
     selectedIndex,
-    students,
+    allStudents,
     isLoading,
     validateForm,
     validateSubjectSection,
@@ -425,7 +444,7 @@ const ManageStudent = ({ refreshDashboard }) => {
   ]);
 
   const handleEdit = useCallback((index) => {
-    const student = students[index];
+    const student = filteredStudents[index];
     setFormData({ 
       ...student, 
       photo: null
@@ -434,18 +453,28 @@ const ManageStudent = ({ refreshDashboard }) => {
     setSelectedIndex(index);
     setCapturedPhoto(null);
     setShowCamera(false);
-  }, [students]);
+  }, [filteredStudents]);
 
   const handleDelete = useCallback(async (index) => {
+    const student = filteredStudents[index];
+    if (student._localOnly) {
+      // Remove from batchStudents/localStorage
+      const updatedBatch = batchStudents.filter(s => s.studentId !== student.studentId);
+      setBatchStudents(updatedBatch);
+      saveBatchStudents(updatedBatch);
+      if (selectedIndex === index) {
+        resetForm();
+      }
+      return;
+    }
     if (!window.confirm('Are you sure you want to delete this student?')) return;
-    const studentToDelete = students[index];
     try {
-      await deleteStudent(studentToDelete._id);
+      await deleteStudent(student._id);
       const dbStudents = await fetchStudents();
-      setStudents(dbStudents);
+      setBackendStudents(dbStudents);
       const subjectInfo = {
-        subjectName: studentToDelete.subject,
-        sectionName: studentToDelete.section,
+        subjectName: student.subject,
+        sectionName: student.section,
       };
       updateSubjectStudentCount(subjectInfo, -1);
       if (selectedIndex === index) {
@@ -455,7 +484,7 @@ const ManageStudent = ({ refreshDashboard }) => {
     } catch (error) {
       alert('Error deleting student.');
     }
-  }, [students, selectedIndex, updateSubjectStudentCount, resetForm, refreshDashboard]);
+  }, [filteredStudents, batchStudents, selectedIndex, updateSubjectStudentCount, resetForm, refreshDashboard]);
 
   return (
     <div className="manage-student-container redesigned-manage-student">
@@ -479,7 +508,7 @@ const ManageStudent = ({ refreshDashboard }) => {
           style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #e2e8f0', fontWeight: 600, background: '#fff', color: '#333' }}
         >
           <option key="all-section" value="">All Sections</option>
-          {[...new Set(students.map(s => s.section))].map((sec, idx) => (
+          {[...new Set(allStudents.map(s => s.section))].map((sec, idx) => (
             <option key={`section-${sec}-${idx}`} value={sec}>{sec}</option>
           ))}
         </select>
@@ -740,8 +769,7 @@ const ManageStudent = ({ refreshDashboard }) => {
         ) : (!isLoading && (
           <div className="student-card-list">
             {filteredStudents.map((student, index) => {
-              const originalIndex = students.findIndex(s => s.studentId === student.studentId);
-              const isEditing = formMode === 'edit' && selectedIndex === originalIndex;
+              const isEditing = formMode === 'edit' && selectedIndex === index;
               return (
                 <div 
                   key={`${student.studentId}-${index}`} 
@@ -750,7 +778,7 @@ const ManageStudent = ({ refreshDashboard }) => {
                   <div className="student-card-photo">
                     {student.photo ? (
                       <img
-                        src={getPhotoUrl(student, originalIndex)}
+                        src={getPhotoUrl(student, index)}
                         alt={student.fullName}
                         width={64}
                         height={64}
@@ -769,14 +797,17 @@ const ManageStudent = ({ refreshDashboard }) => {
                     <div className="student-card-meta">
                       <span className="student-card-id">ID: {student.studentId}</span>
                       <span className="student-card-section">Section: {student.section}</span>
+                      {student._localOnly && (
+                        <span style={{color: '#f39c12', fontWeight: 600, marginLeft: 8}} title="Local only">(Local)</span>
+                      )}
                     </div>
                     <div className="student-card-status-row">
-                      <span className={`status ${student.status.toLowerCase()}`}>{student.status}</span>
+                      <span className={`status ${student.status && student.status.toLowerCase()}`}>{student.status}</span>
                     </div>
                   </div>
                   <div className="student-card-actions">
                     <button 
-                      onClick={() => handleEdit(originalIndex)}
+                      onClick={() => handleEdit(index)}
                       className="edit-button"
                       title="Edit student"
                     >
@@ -784,9 +815,9 @@ const ManageStudent = ({ refreshDashboard }) => {
                     </button>
                     <button 
                       onClick={() => {
-                        setDeletingIndex(originalIndex);
+                        setDeletingIndex(index);
                         if (window.confirm('Are you sure you want to delete this student?')) {
-                          handleDelete(originalIndex);
+                          handleDelete(index);
                         }
                         setDeletingIndex(null);
                       }}
