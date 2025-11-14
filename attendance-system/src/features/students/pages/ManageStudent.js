@@ -309,10 +309,10 @@ const ManageStudent = ({ refreshDashboard }) => {
       }
     }
     const studentData = {
-      fullName: formData.fullName.trim(),
-      studentId: formData.studentId.trim(),
-      section: formData.section.trim(),
-      gradeLevel: formData.gradeLevel.trim(),
+      fullName: String(formData.fullName || '').trim(),
+      studentId: String(formData.studentId || '').trim(),
+      section: String(formData.section || '').trim(),
+      gradeLevel: String(formData.gradeLevel || '').trim(),
       descriptor: descriptor || [],
       photo: photoUrl || null,
       status: 'Active',
