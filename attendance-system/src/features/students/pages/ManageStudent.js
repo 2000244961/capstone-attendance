@@ -102,6 +102,40 @@ const ManageStudent = ({ refreshDashboard }) => {
     setShowCamera(true);
     setFaceVisible(null);
   };
+//changes here
+// Batch upload handler
+  const handleBatchClick = () => excelInputRef.current.click();
+
+  const handleBatchUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data, { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const batchStudents = XLSX.utils.sheet_to_json(sheet);
+
+    for (const s of batchStudents) {
+      try {
+        if (!s.fullName || !s.studentId || !s.section || !s.gradeLevel) continue;
+
+        await addStudent({
+          ...s,
+          descriptor: [],
+          photo: null,
+          status: 'Active',
+        });
+      } catch (err) {
+        console.error(`Failed to add student ${s.fullName}:`, err);
+      }
+    }
+
+    const dbStudents = await fetchStudents();
+    setStudents(dbStudents);
+    alert(`Batch registration completed: ${batchStudents.length} students processed.`);
+  };
+  //last changes here
+  
   // Live face detection in webcam
   useEffect(() => {
     if (showCamera && webcamRef.current) {
@@ -291,8 +325,12 @@ const ManageStudent = ({ refreshDashboard }) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   }, []);
 
-  // ...existing code...
-  // ...existing code...
+  //changes here 
+
+  <button id="batchRegisterBtn">Batch Register</button>
+<input type="file" id="excelInput" accept=".xlsx, .xls" style="display:none;">
+<div id="studentsContainer"></div>
+
 
   // Main handler for adding/updating students (connect to backend)
   const handleRegister = useCallback(async () => {
@@ -509,7 +547,11 @@ const ManageStudent = ({ refreshDashboard }) => {
               <option key={`form-section-${section}-${idx}`} value={section}>{section}</option>
             ))}
           </select>
-              //changes here
+//changes here
+              <button onClick={handleBatchClick} style={{ marginBottom: 12 }}>📁 Batch Register</button>
+      <input type="file" ref={excelInputRef} accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleBatchUpload} />
+//last changes here
+              
           <select
             value={formData.gradeLevel}
             onChange={e => handleInputChange('gradeLevel', e.target.value)}
