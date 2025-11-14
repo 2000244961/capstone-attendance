@@ -796,7 +796,7 @@ const ManageStudent = ({ refreshDashboard }) => {
                       <span className="student-card-id">ID: {student.studentId}</span>
                       <span className="student-card-section">Section: {student.section}</span>
                       {student._localOnly && (
-                        <span style={{color: '#f39c12', fontWeight: 600, marginLeft: 8}} title="Local only">(Local)</span>
+                        <span style={{color: '#f39c12', fontWeight: 600, marginLeft: 8}} title="Local only"></span>
                       )}
                     </div>
                     <div className="student-card-status-row">
