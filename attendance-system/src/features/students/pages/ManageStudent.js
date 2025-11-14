@@ -120,6 +120,10 @@ const ManageStudent = ({ refreshDashboard }) => {
 
     const dbStudents = await fetchStudents();
     setStudents(dbStudents);
+
+    // Save to localStorage as well
+    localStorage.setItem('students', JSON.stringify(dbStudents));
+
     alert(`Batch registration completed: ${batchStudents.length} students processed.`);
   };
 
