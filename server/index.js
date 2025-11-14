@@ -12,7 +12,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: ['https://stirring-youtiao-750d22.netlify.app','http://localhost','*'],
+    origin: ['https://stirring-youtiao-750d22.netlify.app','http://localhost','https://adorable-starship-28e86c.netlify.app/','*'],
     methods: ['GET', 'POST']
   }
 });
