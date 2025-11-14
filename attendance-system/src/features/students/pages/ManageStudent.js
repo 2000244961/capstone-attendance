@@ -57,24 +57,8 @@ const INITIAL_FORM_DATA = {
   photo: null,
 };
 
-const LOCAL_BATCH_KEY = 'batch_students';
-
-function getBatchStudents() {
-  try {
-    const data = localStorage.getItem(LOCAL_BATCH_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveBatchStudents(students) {
-  localStorage.setItem(LOCAL_BATCH_KEY, JSON.stringify(students));
-}
-
 const ManageStudent = ({ refreshDashboard }) => {
-  const [backendStudents, setBackendStudents] = useState([]);
-  const [batchStudents, setBatchStudents] = useState(getBatchStudents());
+  const [students, setStudents] = useState([]);
   const [faceVisible, setFaceVisible] = useState(null);
   const [cameraInterval, setCameraInterval] = useState(null);
   const [searchSection, setSearchSection] = useState('');
@@ -108,46 +92,6 @@ const ManageStudent = ({ refreshDashboard }) => {
     loadSections();
   }, []);
 
-  // Fetch backend students on mount
-  useEffect(() => {
-    const initializeComponent = async () => {
-      try {
-        await loadFaceApiModels();
-      } catch (modelError) {
-        console.error('Error loading face-api.js models:', modelError);
-        alert('Failed to load face detection models. Please check /models files and refresh the page.');
-        setIsLoading(false);
-        return;
-      }
-      try {
-        const dbStudents = await fetchStudents();
-        const processedStudents = await Promise.all(dbStudents.map(async s => {
-          if (s.photo) {
-            if (typeof s.photo === 'string') {
-              return { ...s };
-            }
-            if (s.photo instanceof Blob) {
-              const reader = new FileReader();
-              const base64 = await new Promise(resolve => {
-                reader.onloadend = () => resolve(reader.result);
-                reader.readAsDataURL(s.photo);
-              });
-              return { ...s, photo: base64 };
-            }
-          }
-          return { ...s, photo: null };
-        }));
-        setBackendStudents(processedStudents);
-        setIsLoading(false);
-      } catch (apiError) {
-        console.error('Error fetching students:', apiError);
-        alert('Failed to fetch students from database. Please check your backend and refresh the page.');
-        setIsLoading(false);
-      }
-    };
-    initializeComponent();
-  }, []);
-
   // Batch upload handler
   const handleBatchClick = () => excelInputRef.current.click();
 
@@ -158,24 +102,28 @@ const ManageStudent = ({ refreshDashboard }) => {
     const data = await file.arrayBuffer();
     const workbook = XLSX.read(data, { type: 'array' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const batchStudentsFromFile = XLSX.utils.sheet_to_json(sheet);
+    const batchStudents = XLSX.utils.sheet_to_json(sheet);
 
-    // Only add students with all required fields
-    const newBatch = batchStudentsFromFile
-      .filter(s => s.fullName && s.studentId && s.section && s.gradeLevel)
-      .map(s => ({
-        ...s,
-        descriptor: [],
-        photo: null,
-        status: 'Active',
-        _localOnly: true, // Mark as local-only for clarity
-      }));
+    let addedCount = 0;
+    for (const s of batchStudents) {
+      try {
+        if (!s.fullName || !s.studentId || !s.section || !s.gradeLevel) continue;
+        await addStudent({
+          ...s,
+          descriptor: [],
+          photo: null,
+          status: 'Active',
+        });
+        addedCount++;
+      } catch (err) {
+        console.error(`Failed to add student ${s.fullName}:`, err);
+      }
+    }
 
-    const updatedBatch = [...batchStudents, ...newBatch];
-    setBatchStudents(updatedBatch);
-    saveBatchStudents(updatedBatch);
+    const dbStudents = await fetchStudents();
+    setStudents(dbStudents);
 
-    alert(`Batch registration completed: ${newBatch.length} students processed.`);
+    alert(`Batch registration completed: ${addedCount} students processed.`);
   };
 
   // Live face detection in webcam
@@ -225,14 +173,14 @@ const ManageStudent = ({ refreshDashboard }) => {
   // Group students by section and subject
   const groupBySectionSubject = useCallback(() => {
     const groups = {};
-    allStudents.forEach(student => {
+    students.forEach(student => {
       const key = `${student.section} - ${student.subject}`;
       if (!groups[key]) groups[key] = [];
       groups[key].push(student);
     });
     setGroupedStudents(groups);
     setShowGroupModal(true);
-  }, [backendStudents, batchStudents]);
+  }, [students]);
 
   // Add missing function definitions
   const handleFormSubmit = (e) => {
@@ -274,16 +222,48 @@ const ManageStudent = ({ refreshDashboard }) => {
     }
   }, [cameraInterval]);
 
-  // Merge backend and batch students for display
-  const allStudents = useMemo(() => {
-    // Avoid duplicate studentId (backend takes priority)
-    const backendIds = new Set(backendStudents.map(s => s.studentId));
-    const filteredBatch = batchStudents.filter(s => !backendIds.has(s.studentId));
-    return [...backendStudents, ...filteredBatch];
-  }, [backendStudents, batchStudents]);
+  // Load face detection models and fetch students from backend
+  useEffect(() => {
+    const initializeComponent = async () => {
+      try {
+        await loadFaceApiModels();
+      } catch (modelError) {
+        console.error('Error loading face-api.js models:', modelError);
+        alert('Failed to load face detection models. Please check /models files and refresh the page.');
+        setIsLoading(false);
+        return;
+      }
+      try {
+        const dbStudents = await fetchStudents();
+        const processedStudents = await Promise.all(dbStudents.map(async s => {
+          if (s.photo) {
+            if (typeof s.photo === 'string') {
+              return { ...s };
+            }
+            if (s.photo instanceof Blob) {
+              const reader = new FileReader();
+              const base64 = await new Promise(resolve => {
+                reader.onloadend = () => resolve(reader.result);
+                reader.readAsDataURL(s.photo);
+              });
+              return { ...s, photo: base64 };
+            }
+          }
+          return { ...s, photo: null };
+        }));
+        setStudents(processedStudents);
+        setIsLoading(false);
+      } catch (apiError) {
+        console.error('Error fetching students:', apiError);
+        alert('Failed to fetch students from database. Please check your backend and refresh the page.');
+        setIsLoading(false);
+      }
+    };
+    initializeComponent();
+  }, []);
 
   const filteredStudents = useMemo(() => {
-    let filtered = allStudents;
+    let filtered = students;
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(student =>
@@ -298,7 +278,7 @@ const ManageStudent = ({ refreshDashboard }) => {
       filtered = filtered.filter(student => student.subject === searchSubject);
     }
     return filtered;
-  }, [allStudents, searchQuery, searchSection, searchSubject]);
+  }, [students, searchQuery, searchSection, searchSubject]);
 
   const resetForm = useCallback(() => {
     setFormData(INITIAL_FORM_DATA);
@@ -366,7 +346,7 @@ const ManageStudent = ({ refreshDashboard }) => {
         photoUrl = null;
       }
     } else if (formMode === 'edit' && selectedIndex !== null) {
-      const existingStudent = allStudents[selectedIndex];
+      const existingStudent = students[selectedIndex];
       descriptor = existingStudent.descriptor;
       if (!Array.isArray(descriptor) || descriptor.length !== 128 || descriptor.some(isNaN)) {
         alert('Existing face descriptor is invalid. Please update the photo.');
@@ -384,17 +364,14 @@ const ManageStudent = ({ refreshDashboard }) => {
         photoUrl = null;
       }
     }
-    if (!photoUrl) {
-      alert('Photo is missing or invalid. Please retake the photo.');
-      return;
-    }
+    // Allow registration even if photo is missing (for batch or manual)
     const studentData = {
       fullName: formData.fullName.trim(),
       studentId: formData.studentId.trim(),
       section: formData.section.trim(),
       gradeLevel: formData.gradeLevel.trim(),
-      descriptor,
-      photo: photoUrl,
+      descriptor: descriptor || [],
+      photo: photoUrl || null,
       status: 'Active',
     };
     try {
@@ -403,7 +380,7 @@ const ManageStudent = ({ refreshDashboard }) => {
         result = await addStudent(studentData);
         updateSubjectStudentCount(subjectInfo, 1);
       } else {
-        result = await updateStudent(allStudents[selectedIndex]._id, studentData);
+        result = await updateStudent(students[selectedIndex]._id, studentData);
       }
       const dbStudents = await fetchStudents();
       const processedStudents = await Promise.all(dbStudents.map(async s => {
@@ -422,7 +399,7 @@ const ManageStudent = ({ refreshDashboard }) => {
         }
         return { ...s, photo: null };
       }));
-      setBackendStudents(processedStudents);
+      setStudents(processedStudents);
       resetForm();
       alert(`Student ${formMode === 'add' ? 'registered' : 'updated'} successfully!`);
     } catch (error) {
@@ -433,7 +410,7 @@ const ManageStudent = ({ refreshDashboard }) => {
     formData,
     formMode,
     selectedIndex,
-    allStudents,
+    students,
     isLoading,
     validateForm,
     validateSubjectSection,
@@ -444,7 +421,7 @@ const ManageStudent = ({ refreshDashboard }) => {
   ]);
 
   const handleEdit = useCallback((index) => {
-    const student = filteredStudents[index];
+    const student = students[index];
     setFormData({ 
       ...student, 
       photo: null
@@ -453,28 +430,18 @@ const ManageStudent = ({ refreshDashboard }) => {
     setSelectedIndex(index);
     setCapturedPhoto(null);
     setShowCamera(false);
-  }, [filteredStudents]);
+  }, [students]);
 
   const handleDelete = useCallback(async (index) => {
-    const student = filteredStudents[index];
-    if (student._localOnly) {
-      // Remove from batchStudents/localStorage
-      const updatedBatch = batchStudents.filter(s => s.studentId !== student.studentId);
-      setBatchStudents(updatedBatch);
-      saveBatchStudents(updatedBatch);
-      if (selectedIndex === index) {
-        resetForm();
-      }
-      return;
-    }
     if (!window.confirm('Are you sure you want to delete this student?')) return;
+    const studentToDelete = students[index];
     try {
-      await deleteStudent(student._id);
+      await deleteStudent(studentToDelete._id);
       const dbStudents = await fetchStudents();
-      setBackendStudents(dbStudents);
+      setStudents(dbStudents);
       const subjectInfo = {
-        subjectName: student.subject,
-        sectionName: student.section,
+        subjectName: studentToDelete.subject,
+        sectionName: studentToDelete.section,
       };
       updateSubjectStudentCount(subjectInfo, -1);
       if (selectedIndex === index) {
@@ -484,7 +451,7 @@ const ManageStudent = ({ refreshDashboard }) => {
     } catch (error) {
       alert('Error deleting student.');
     }
-  }, [filteredStudents, batchStudents, selectedIndex, updateSubjectStudentCount, resetForm, refreshDashboard]);
+  }, [students, selectedIndex, updateSubjectStudentCount, resetForm, refreshDashboard]);
 
   return (
     <div className="manage-student-container redesigned-manage-student">
@@ -508,7 +475,7 @@ const ManageStudent = ({ refreshDashboard }) => {
           style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #e2e8f0', fontWeight: 600, background: '#fff', color: '#333' }}
         >
           <option key="all-section" value="">All Sections</option>
-          {[...new Set(allStudents.map(s => s.section))].map((sec, idx) => (
+          {[...new Set(students.map(s => s.section))].map((sec, idx) => (
             <option key={`section-${sec}-${idx}`} value={sec}>{sec}</option>
           ))}
         </select>
@@ -529,38 +496,40 @@ const ManageStudent = ({ refreshDashboard }) => {
             value={formData.studentId}
             onChange={e => handleInputChange('studentId', e.target.value)}
           />
-          <select
-            name="section"
-            value={formData.section}
-            onChange={e => handleInputChange('section', e.target.value)}
-            required
-            style={{ marginBottom: '12px', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-          >
-            <option key="form-select-section" value="">Select Section</option>
-            {sectionList.map((section, idx) => (
-              <option key={`form-section-${section}-${idx}`} value={section}>{section}</option>
-            ))}
-          </select>
-          <select
-            value={formData.gradeLevel}
-            onChange={e => handleInputChange('gradeLevel', e.target.value)}
-            required
-            style={{ marginBottom: '12px', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-          >
-            <option value="">Select Grade Level</option>
-            {[1, 2, 3, 4, 5, 6].map(grade => (
-              <option key={grade} value={grade}>
-                Grade {grade}
-              </option>
-            ))}
-          </select>
+          <div style={{ display: 'flex', gap: '16px', marginBottom: '12px' }}>
+            <select
+              name="section"
+              value={formData.section}
+              onChange={e => handleInputChange('section', e.target.value)}
+              required
+              style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', flex: 1 }}
+            >
+              <option key="form-select-section" value="">Select Section</option>
+              {sectionList.map((section, idx) => (
+                <option key={`form-section-${section}-${idx}`} value={section}>{section}</option>
+              ))}
+            </select>
+            <select
+              value={formData.gradeLevel}
+              onChange={e => handleInputChange('gradeLevel', e.target.value)}
+              required
+              style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', flex: 1 }}
+            >
+              <option value="">Select Grade Level</option>
+              {[1, 2, 3, 4, 5, 6].map(grade => (
+                <option key={grade} value={grade}>
+                  Grade {grade}
+                </option>
+              ))}
+            </select>
+          </div>
           {/* Camera Section */}
           <div className="photo-section">
             <label className="photo-label">
               Student Photo *
             </label>
             {!showCamera && !capturedPhoto && (
-              <div className="camera-controls">
+              <div className="camera-controls" style={{ display: 'flex', gap: '16px', marginBottom: '12px' }}>
                 <button 
                   type="button"
                   onClick={openCamera}
@@ -769,7 +738,8 @@ const ManageStudent = ({ refreshDashboard }) => {
         ) : (!isLoading && (
           <div className="student-card-list">
             {filteredStudents.map((student, index) => {
-              const isEditing = formMode === 'edit' && selectedIndex === index;
+              const originalIndex = students.findIndex(s => s.studentId === student.studentId);
+              const isEditing = formMode === 'edit' && selectedIndex === originalIndex;
               return (
                 <div 
                   key={`${student.studentId}-${index}`} 
@@ -778,7 +748,7 @@ const ManageStudent = ({ refreshDashboard }) => {
                   <div className="student-card-photo">
                     {student.photo ? (
                       <img
-                        src={getPhotoUrl(student, index)}
+                        src={getPhotoUrl(student, originalIndex)}
                         alt={student.fullName}
                         width={64}
                         height={64}
@@ -797,9 +767,6 @@ const ManageStudent = ({ refreshDashboard }) => {
                     <div className="student-card-meta">
                       <span className="student-card-id">ID: {student.studentId}</span>
                       <span className="student-card-section">Section: {student.section}</span>
-                      {student._localOnly && (
-                        <span style={{color: '#f39c12', fontWeight: 600, marginLeft: 8}} title="Local only">(Local)</span>
-                      )}
                     </div>
                     <div className="student-card-status-row">
                       <span className={`status ${student.status && student.status.toLowerCase()}`}>{student.status}</span>
@@ -807,7 +774,7 @@ const ManageStudent = ({ refreshDashboard }) => {
                   </div>
                   <div className="student-card-actions">
                     <button 
-                      onClick={() => handleEdit(index)}
+                      onClick={() => handleEdit(originalIndex)}
                       className="edit-button"
                       title="Edit student"
                     >
@@ -815,9 +782,9 @@ const ManageStudent = ({ refreshDashboard }) => {
                     </button>
                     <button 
                       onClick={() => {
-                        setDeletingIndex(index);
+                        setDeletingIndex(originalIndex);
                         if (window.confirm('Are you sure you want to delete this student?')) {
-                          handleDelete(index);
+                          handleDelete(originalIndex);
                         }
                         setDeletingIndex(null);
                       }}
