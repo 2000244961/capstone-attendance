@@ -79,7 +79,7 @@ router.get('/', async (req, res) => {
   try {
     const { section, startDate, endDate } = req.query;
     let query = {};
-    if (date) {
+    if (startDate && endDate) {
       // Accept any time on the selected date
       const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
