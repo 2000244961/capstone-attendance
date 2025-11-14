@@ -594,6 +594,14 @@ const ManageStudent = ({ refreshDashboard }) => {
       cursor: 'pointer',
       fontSize: '14px'
     }}>
+  //changes here 
+
+  <button id="batchRegisterBtn">Batch Register</button>
+<input type="file" id="excelInput" accept=".xlsx, .xls" style="display:none;">
+<div id="studentsContainer"></div>
+    </label>
+  </div>
+)}
       📁 Upload Photo
       <input
         type="file"
@@ -611,14 +619,7 @@ const ManageStudent = ({ refreshDashboard }) => {
           }
         }}
       />
-           //changes here 
-
-  <button id="batchRegisterBtn">Batch Register</button>
-<input type="file" id="excelInput" accept=".xlsx, .xls" style="display:none;">
-<div id="studentsContainer"></div>
-    </label>
-  </div>
-)}
+         
             {showCamera && (
               <div className="camera-container" style={{marginTop: '10px'}}>
                 <Webcam
