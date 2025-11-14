@@ -325,12 +325,6 @@ const ManageStudent = ({ refreshDashboard }) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   }, []);
 
-  //changes here 
-
-  <button id="batchRegisterBtn">Batch Register</button>
-<input type="file" id="excelInput" accept=".xlsx, .xls" style="display:none;">
-<div id="studentsContainer"></div>
-
 
   // Main handler for adding/updating students (connect to backend)
   const handleRegister = useCallback(async () => {
@@ -617,6 +611,11 @@ const ManageStudent = ({ refreshDashboard }) => {
           }
         }}
       />
+           //changes here 
+
+  <button id="batchRegisterBtn">Batch Register</button>
+<input type="file" id="excelInput" accept=".xlsx, .xls" style="display:none;">
+<div id="studentsContainer"></div>
     </label>
   </div>
 )}
