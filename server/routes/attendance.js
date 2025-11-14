@@ -77,15 +77,15 @@ router.get('/today', async (req, res) => {
 // Get all attendance records for a specific date (and section if provided)
 router.get('/', async (req, res) => {
   try {
-    const { date, section } = req.query;
+    const { section, startDate, endDate } = req.query;
     let query = {};
     if (date) {
       // Accept any time on the selected date
-      const start = new Date(date);
+      const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
-      const end = new Date(date);
+      const end = new Date(to);
       end.setHours(23, 59, 59, 999);
-      query.date = { $gte: start, $lte: end };
+      query.date = { $gte: start, $lte: endDate };
     }
     if (section) {
       query.section = section;
