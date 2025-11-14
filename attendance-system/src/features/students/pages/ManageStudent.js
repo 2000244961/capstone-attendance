@@ -513,6 +513,8 @@ const ManageStudent = ({ refreshDashboard }) => {
           <select
             value={formData.gradeLevel}
             onChange={e => handleInputChange('gradeLevel', e.target.value)}
+              required
+              style={{ marginBottom: '12px', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
           >
             <option value="">Select Grade Level</option>
             {[1, 2, 3, 4, 5, 6].map(grade => (
