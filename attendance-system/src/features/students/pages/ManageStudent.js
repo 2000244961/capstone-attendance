@@ -2,14 +2,14 @@ import { debugDescriptor } from './debugHelper';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Webcam from 'react-webcam';
-// Removed direct import of @tensorflow/tfjs; use face-api.js only
+import * as XLSX from 'xlsx';
 import * as faceapi from 'face-api.js';
 import { loadFaceApiModels, areModelsLoaded } from '../../shared/faceApiLoader';
 import { fetchStudents, addStudent, updateStudent, deleteStudent } from './studentApi';
 import { fetchSubjectSections } from './subjectSectionApi';
 import '../styles/ManageStudent.css';
-// Removed stray 'a' character
-// Add processFaceDetection after all imports
+
+// Helper for face detection
 async function processFaceDetection(photo) {
   try {
     if (!areModelsLoaded()) {
@@ -48,7 +48,6 @@ async function processFaceDetection(photo) {
   }
 }
 
-
 const INITIAL_FORM_DATA = {
   fullName: '',
   studentId: '',
@@ -58,13 +57,7 @@ const INITIAL_FORM_DATA = {
   photo: null,
 };
 
-const STORAGE_KEYS = {
-  students: 'students',
-  subjects: 'subjects',
-};
-
 const ManageStudent = ({ refreshDashboard }) => {
-  // All useState declarations at the top to avoid ReferenceError
   const [students, setStudents] = useState([]);
   const [faceVisible, setFaceVisible] = useState(null);
   const [cameraInterval, setCameraInterval] = useState(null);
@@ -81,9 +74,10 @@ const ManageStudent = ({ refreshDashboard }) => {
   const [showCamera, setShowCamera] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState(null);
   const [sectionList, setSectionList] = useState([]);
-  // refs
   const webcamRef = useRef(null);
+  const excelInputRef = useRef(null);
   const navigate = useNavigate();
+
   // Fetch section list from subject/section table
   useEffect(() => {
     async function loadSections() {
@@ -98,12 +92,7 @@ const ManageStudent = ({ refreshDashboard }) => {
     loadSections();
   }, []);
 
-  const openCamera = () => {
-    setShowCamera(true);
-    setFaceVisible(null);
-  };
-//changes here
-// Batch upload handler
+  // Batch upload handler
   const handleBatchClick = () => excelInputRef.current.click();
 
   const handleBatchUpload = async (e) => {
@@ -118,7 +107,6 @@ const ManageStudent = ({ refreshDashboard }) => {
     for (const s of batchStudents) {
       try {
         if (!s.fullName || !s.studentId || !s.section || !s.gradeLevel) continue;
-
         await addStudent({
           ...s,
           descriptor: [],
@@ -134,8 +122,7 @@ const ManageStudent = ({ refreshDashboard }) => {
     setStudents(dbStudents);
     alert(`Batch registration completed: ${batchStudents.length} students processed.`);
   };
-  //last changes here
-  
+
   // Live face detection in webcam
   useEffect(() => {
     if (showCamera && webcamRef.current) {
@@ -164,6 +151,11 @@ const ManageStudent = ({ refreshDashboard }) => {
     }
   }, [showCamera]);
 
+  const openCamera = () => {
+    setShowCamera(true);
+    setFaceVisible(null);
+  };
+
   const capturePhoto = useCallback(() => {
     if (webcamRef.current) {
       const screenshot = webcamRef.current.getScreenshot();
@@ -172,7 +164,9 @@ const ManageStudent = ({ refreshDashboard }) => {
       setShowCamera(false);
     }
   }, [webcamRef]);
+
   const retakePhoto = () => { setCapturedPhoto(null); setShowCamera(true); };
+
   // Group students by section and subject
   const groupBySectionSubject = useCallback(() => {
     const groups = {};
@@ -184,50 +178,46 @@ const ManageStudent = ({ refreshDashboard }) => {
     setGroupedStudents(groups);
     setShowGroupModal(true);
   }, [students]);
-  // ...existing code...
-    // Add missing function definitions
-    const handleFormSubmit = (e) => {
-      e.preventDefault();
-      handleRegister();
-    };
 
-    const validateForm = useCallback(() => {
-      // Basic validation: check required fields
-      if (!formData.fullName.trim() || !formData.studentId.trim() || !formData.section.trim() || !formData.gradeLevel.trim()) {
-        alert('Please fill in all required fields.');
-        return false;
-      }
-      if (/\d/.test(formData.fullName)) {
-    alert('Full Name should not contain numbers.');
-    return false;
-  }
-      return true;
-    }, [formData]);
+  // Add missing function definitions
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    handleRegister();
+  };
 
-    const validateSubjectSection = useCallback(() => {
-      // Basic validation: ensure section exists
-      if (!sectionList.includes(formData.section)) {
-        alert('Selected section does not exist.');
-        return null;
-      }
-      return { sectionName: formData.section };
-    }, [formData, sectionList]);
+  const validateForm = useCallback(() => {
+    if (!formData.fullName.trim() || !formData.studentId.trim() || !formData.section.trim() || !formData.gradeLevel.trim()) {
+      alert('Please fill in all required fields.');
+      return false;
+    }
+    if (/\d/.test(formData.fullName)) {
+      alert('Full Name should not contain numbers.');
+      return false;
+    }
+    return true;
+  }, [formData]);
 
-    const updateSubjectStudentCount = useCallback((subjectInfo, delta) => {
-      // Placeholder: implement API call to update student count for section/subject
-      // e.g., subjectSectionApi.updateStudentCount(subjectInfo.sectionName, delta);
-      // For now, just log
-      console.log('Update student count for', subjectInfo, 'by', delta);
-    }, []);
+  const validateSubjectSection = useCallback(() => {
+    if (!sectionList.includes(formData.section)) {
+      alert('Selected section does not exist.');
+      return null;
+    }
+    return { sectionName: formData.section };
+  }, [formData, sectionList]);
 
-    const closeCamera = useCallback(() => {
-      setShowCamera(false);
-      setFaceVisible(null);
-      if (cameraInterval) {
-        clearInterval(cameraInterval);
-        setCameraInterval(null);
-      }
-    }, [cameraInterval]);
+  const updateSubjectStudentCount = useCallback((subjectInfo, delta) => {
+    // Placeholder: implement API call to update student count for section/subject
+    console.log('Update student count for', subjectInfo, 'by', delta);
+  }, []);
+
+  const closeCamera = useCallback(() => {
+    setShowCamera(false);
+    setFaceVisible(null);
+    if (cameraInterval) {
+      clearInterval(cameraInterval);
+      setCameraInterval(null);
+    }
+  }, [cameraInterval]);
 
   // Load face detection models and fetch students from backend
   useEffect(() => {
@@ -242,15 +232,12 @@ const ManageStudent = ({ refreshDashboard }) => {
       }
       try {
         const dbStudents = await fetchStudents();
-        // Ensure photo field is always a valid displayable base64 string or URL
         const processedStudents = await Promise.all(dbStudents.map(async s => {
           if (s.photo) {
             if (typeof s.photo === 'string') {
-              // If photo is already a base64 string or URL, use it
               return { ...s };
             }
             if (s.photo instanceof Blob) {
-              // Convert Blob to base64 string
               const reader = new FileReader();
               const base64 = await new Promise(resolve => {
                 reader.onloadend = () => resolve(reader.result);
@@ -259,7 +246,6 @@ const ManageStudent = ({ refreshDashboard }) => {
               return { ...s, photo: base64 };
             }
           }
-          // If no photo, show placeholder
           return { ...s, photo: null };
         }));
         setStudents(processedStudents);
@@ -272,25 +258,25 @@ const ManageStudent = ({ refreshDashboard }) => {
     };
     initializeComponent();
   }, []);
-        const filteredStudents = useMemo(() => {
-          let filtered = students;
-          if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase();
-            filtered = filtered.filter(student =>
-              (student.fullName && student.fullName.toLowerCase().includes(query)) ||
-              (student.studentId && student.studentId.toLowerCase().includes(query))
-            );
-          }
-          if (searchSection) {
-            filtered = filtered.filter(student => student.section === searchSection);
-          }
-          if (searchSubject) {
-            filtered = filtered.filter(student => student.subject === searchSubject);
-          }
-          return filtered;
-        }, [students, searchQuery, searchSection, searchSubject]);
 
-  // Reset form to initial state
+  const filteredStudents = useMemo(() => {
+    let filtered = students;
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(student =>
+        (student.fullName && student.fullName.toLowerCase().includes(query)) ||
+        (student.studentId && student.studentId.toLowerCase().includes(query))
+      );
+    }
+    if (searchSection) {
+      filtered = filtered.filter(student => student.section === searchSection);
+    }
+    if (searchSubject) {
+      filtered = filtered.filter(student => student.subject === searchSubject);
+    }
+    return filtered;
+  }, [students, searchQuery, searchSection, searchSubject]);
+
   const resetForm = useCallback(() => {
     setFormData(INITIAL_FORM_DATA);
     setFormMode('add');
@@ -299,17 +285,14 @@ const ManageStudent = ({ refreshDashboard }) => {
     setShowCamera(false);
   }, []);
 
-  // Get photo URL for display
   const getPhotoUrl = useCallback((student, index) => {
     if (formMode === 'edit' && selectedIndex === index) {
       if (capturedPhoto) {
         return capturedPhoto;
       } else if (formData.photo) {
-        // If photo is a base64 string, use it directly
         if (typeof formData.photo === 'string') {
           return formData.photo;
         }
-        // If photo is a Blob, convert to base64
         if (formData.photo instanceof Blob) {
           const reader = new FileReader();
           reader.readAsDataURL(formData.photo);
@@ -320,11 +303,9 @@ const ManageStudent = ({ refreshDashboard }) => {
     return student.photo;
   }, [formMode, selectedIndex, formData.photo, capturedPhoto]);
 
-  // Generic form input handler
   const handleInputChange = useCallback((field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   }, []);
-
 
   // Main handler for adding/updating students (connect to backend)
   const handleRegister = useCallback(async () => {
@@ -337,23 +318,19 @@ const ManageStudent = ({ refreshDashboard }) => {
     }
     let descriptor = formData.descriptor;
     let photoUrl = null;
-    // Use capturedPhoto if present
     const photoSource = formData.photo || capturedPhoto;
     if (photoSource) {
       let detectionBlob = photoSource;
       if (typeof photoSource === 'string' && photoSource.startsWith('data:image')) {
-        // Convert base64 to blob for face detection
         const response = await fetch(photoSource);
         detectionBlob = await response.blob();
       }
       descriptor = await processFaceDetection(detectionBlob);
       if (!descriptor) return;
-      // Ensure descriptor is a flat array of 128 numbers
       if (!Array.isArray(descriptor) || descriptor.length !== 128 || descriptor.some(isNaN)) {
         alert('Face descriptor is invalid. Please retake the photo.');
         return;
       }
-      // Always use base64 string for photo
       if (photoSource instanceof Blob) {
         const reader = new FileReader();
         photoUrl = await new Promise(resolve => {
@@ -366,15 +343,12 @@ const ManageStudent = ({ refreshDashboard }) => {
         photoUrl = null;
       }
     } else if (formMode === 'edit' && selectedIndex !== null) {
-      // Keep existing data for edit mode without new photo
       const existingStudent = students[selectedIndex];
       descriptor = existingStudent.descriptor;
-      // Ensure descriptor is a flat array of 128 numbers
       if (!Array.isArray(descriptor) || descriptor.length !== 128 || descriptor.some(isNaN)) {
         alert('Existing face descriptor is invalid. Please update the photo.');
         return;
       }
-      // If photo is not base64, convert it
       if (existingStudent.photo && typeof existingStudent.photo === 'string') {
         photoUrl = existingStudent.photo;
       } else if (existingStudent.photo instanceof Blob) {
@@ -387,7 +361,6 @@ const ManageStudent = ({ refreshDashboard }) => {
         photoUrl = null;
       }
     }
-    // Ensure photo is not null
     if (!photoUrl) {
       alert('Photo is missing or invalid. Please retake the photo.');
       return;
@@ -416,7 +389,6 @@ const ManageStudent = ({ refreshDashboard }) => {
             return { ...s };
           }
           if (s.photo instanceof Blob) {
-            // Convert Blob to base64 string
             const reader = new FileReader();
             const base64 = await new Promise(resolve => {
               reader.onloadend = () => resolve(reader.result);
@@ -430,7 +402,6 @@ const ManageStudent = ({ refreshDashboard }) => {
       setStudents(processedStudents);
       resetForm();
       alert(`Student ${formMode === 'add' ? 'registered' : 'updated'} successfully!`);
-    // Do NOT redirect to login or attendance, just refresh student list and reset form
     } catch (error) {
       console.error('Error saving student:', error);
       alert('Error saving student data. Please try again.');
@@ -449,12 +420,11 @@ const ManageStudent = ({ refreshDashboard }) => {
     navigate
   ]);
 
-  // Handle editing a student
   const handleEdit = useCallback((index) => {
     const student = students[index];
     setFormData({ 
       ...student, 
-      photo: null // Reset photo to allow new capture
+      photo: null
     });
     setFormMode('edit');
     setSelectedIndex(index);
@@ -462,7 +432,6 @@ const ManageStudent = ({ refreshDashboard }) => {
     setShowCamera(false);
   }, [students]);
 
-  // Handle deleting a student
   const handleDelete = useCallback(async (index) => {
     if (!window.confirm('Are you sure you want to delete this student?')) return;
     const studentToDelete = students[index];
@@ -470,7 +439,6 @@ const ManageStudent = ({ refreshDashboard }) => {
       await deleteStudent(studentToDelete._id);
       const dbStudents = await fetchStudents();
       setStudents(dbStudents);
-      // Update subject student count
       const subjectInfo = {
         subjectName: studentToDelete.subject,
         sectionName: studentToDelete.section,
@@ -489,6 +457,8 @@ const ManageStudent = ({ refreshDashboard }) => {
     <div className="manage-student-container redesigned-manage-student">
       <div className="header-section redesigned-header-section">
         <h1>Manage Students</h1>
+        <button onClick={handleBatchClick} style={{ marginBottom: 12 }}>📁 Batch Register</button>
+        <input type="file" ref={excelInputRef} accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleBatchUpload} />
       </div>
       {/* Search controls for section, subject, and student */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 24, alignItems: 'center' }}>
@@ -512,10 +482,7 @@ const ManageStudent = ({ refreshDashboard }) => {
       </div>
       
       <div className="student-controls">
-  {/* Removed duplicate search input from form area */}
-
         <h2>{formMode === 'add' ? 'Add Student' : 'Edit Student'}</h2>
-        
         <div className="form-inputs">
           <input
             type="text"
@@ -541,12 +508,11 @@ const ManageStudent = ({ refreshDashboard }) => {
               <option key={`form-section-${section}-${idx}`} value={section}>{section}</option>
             ))}
           </select>
-              
           <select
             value={formData.gradeLevel}
             onChange={e => handleInputChange('gradeLevel', e.target.value)}
-              required
-              style={{ marginBottom: '12px', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+            required
+            style={{ marginBottom: '12px', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
           >
             <option value="">Select Grade Level</option>
             {[1, 2, 3, 4, 5, 6].map(grade => (
@@ -555,14 +521,11 @@ const ManageStudent = ({ refreshDashboard }) => {
               </option>
             ))}
           </select>
-
-          
           {/* Camera Section */}
           <div className="photo-section">
             <label className="photo-label">
               Student Photo *
             </label>
-            
             {!showCamera && !capturedPhoto && (
               <div className="camera-controls">
                 <button 
@@ -582,37 +545,34 @@ const ManageStudent = ({ refreshDashboard }) => {
                   📷 Take Photo
                 </button>
                 <label style={{
-      backgroundColor: '#007bff',
-      color: 'white',
-      padding: '10px 20px',
-      border: 'none',
-      borderRadius: '5px',
-      cursor: 'pointer',
-      fontSize: '14px'
-    }}>
- 
-      📁 Upload Photo
-      <input
-        type="file"
-        accept="image/*"
-        style={{ display: 'none' }}
-        onChange={async (e) => {
-          const file = e.target.files[0];
-          if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              setCapturedPhoto(reader.result);
-              setFormData(prev => ({ ...prev, photo: reader.result }));
-            };
-            reader.readAsDataURL(file);
-          }
-        }}
-          //changes here
-              <button onClick={handleBatchClick} style={{ marginBottom: 12 }}>📁 Batch Register</button>
-      <input type="file" ref={excelInputRef} accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleBatchUpload} />
-//last changes here
-      />
-         
+                  backgroundColor: '#007bff',
+                  color: 'white',
+                  padding: '10px 20px',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}>
+                  📁 Upload Photo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={async (e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          setCapturedPhoto(reader.result);
+                          setFormData(prev => ({ ...prev, photo: reader.result }));
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+            )}
             {showCamera && (
               <div className="camera-container" style={{marginTop: '10px'}}>
                 <Webcam
@@ -670,7 +630,6 @@ const ManageStudent = ({ refreshDashboard }) => {
                 </div>
               </div>
             )}
-
             {capturedPhoto && (
               <div className="captured-photo" style={{marginTop: '10px'}}>
                 <img 
@@ -705,7 +664,6 @@ const ManageStudent = ({ refreshDashboard }) => {
               </div>
             )}
           </div>
-          
           <div className="form-actions">
             <button 
               onClick={handleRegister} 
@@ -727,7 +685,6 @@ const ManageStudent = ({ refreshDashboard }) => {
           </div>
         </div>
       </div>
-
       <div className="student-table">
         {/* Grouped students modal */}
         {showGroupModal && (
