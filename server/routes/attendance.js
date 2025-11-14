@@ -83,9 +83,9 @@ router.get('/', async (req, res) => {
       // Accept any time on the selected date
       const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
-      const end = new Date(to);
+      const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
-      query.date = { $gte: start, $lte: endDate };
+      query.date = { $gte: start, $lte: end };
     }
     if (section) {
       query.section = section;
